@@ -1,0 +1,35 @@
+kind = "web"
+previewPath = "/"
+title = "MUSICOTECA"
+version = "1.0.0"
+id = "artifacts/musicoteca"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25195
+
+[services.development]
+run = "pnpm --filter @workspace/musicoteca run dev"
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/musicoteca", "run", "build" ]
+
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = [ "pnpm", "--filter", "@workspace/musicoteca", "run", "start" ]
+
+[services.production.run.env]
+PORT = "25195"
+NODE_ENV = "production"
+
+[services.env]
+PORT = "25195"
+BASE_PATH = "/"
