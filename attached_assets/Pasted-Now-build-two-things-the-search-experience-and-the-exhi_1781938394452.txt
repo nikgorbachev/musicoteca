@@ -1,0 +1,80 @@
+Now build two things: the search experience and the exhibit page layout.
+Don't change the design system, fonts, or theme toggle.
+
+--- SEARCH FLOW ---
+
+When the user focuses the search bar on the home page,
+navigate to /search (a new route).
+
+/search page:
+- Search bar pinned at top, auto-focused
+- Back arrow to return home
+- As user types (debounced 400ms), call GET /api/search?q=...
+- Results fill the rest of the page height, scrollable
+- Each result is a row: small square album thumbnail 
+  on the left, track title + artist name on the right
+- Tapping a result navigates to /exhibit/[trackId]
+- If no results: show "No results" in small grey italic text
+- No loading spinners — just instant render when results arrive
+
+The /api/search route should for now return 3 hardcoded 
+fixture results (we'll wire real Musixmatch later):
+[
+  { trackId: "1", title: "Звезда по имени Солнце", 
+    artist: "Кино", coverUrl: "https://placehold.co/60x60/0D0F14/F0F0ED?text=К" },
+  { trackId: "2", title: "La sera dei miracoli", 
+    artist: "Lucio Dalla", coverUrl: "https://placehold.co/60x60/0D0F14/F0F0ED?text=LD" },
+  { trackId: "3", title: "Wonderwall", 
+    artist: "Oasis", coverUrl: "https://placehold.co/60x60/0D0F14/F0F0ED?text=O" }
+]
+(return all 3 regardless of query for now)
+
+--- EXHIBIT PAGE ---
+
+/exhibit/[trackId] — three panels, mobile-first.
+
+ON MOBILE:
+Horizontal scroll-snap between three full-viewport-width panels.
+Use CSS scroll-snap (scroll-snap-type: x mandatory on container,
+scroll-snap-align: start on each panel).
+No libraries.
+Small dot indicator at the bottom showing which panel is active
+(3 dots, active dot filled, others outline).
+
+Panel 1 — SONG:
+- Album cover image, square, full width minus padding
+- Track title in Playfair Display, large
+- Artist name in small spaced caps below
+- Thin divider line
+- Simple audio player: play/pause icon button + 
+  thin progress bar (no time labels)
+- Lyrics below, scrollable within the panel, 
+  generous line-height, Inter regular
+- Below lyrics (after a divider): 
+  "LENS" label in small spaced caps, 
+  then italic summary paragraph
+
+Panel 2 — INNER WORLD:
+- Heading "INNER WORLD" in small spaced caps
+- Subheading: artist name + year in grey
+- Body text (lorem ipsum for now, 
+  we'll replace with real content later)
+- Small "▶ Listen" button at bottom — 
+  stub for ElevenLabs TTS, no functionality yet
+
+Panel 3 — THE MOMENT:
+- Heading "THE MOMENT" in small spaced caps  
+- Subheading: city/country + year in grey
+- Body text (lorem ipsum for now)
+- Small "▶ Listen" button at bottom — stub
+
+ON DESKTOP (md breakpoint and above):
+All three panels visible simultaneously as columns,
+left | center | right.
+Center column is wider (roughly 50%), 
+side columns split the rest equally.
+No horizontal scroll-snap on desktop.
+
+Use the fixture trackId "1" (Кино track) 
+as hardcoded content for all three panels.
+Don't wire any real APIs yet.

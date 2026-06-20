@@ -9,7 +9,7 @@ export default function HomePage() {
       </div>
 
       <div className="flex w-full max-w-xl flex-col items-center text-center">
-        <h1 className="font-serif text-3xl font-medium tracking-[0.45em] sm:text-4xl md:text-5xl">
+        <h1 className="whitespace-nowrap font-serif font-medium text-[clamp(1.2rem,5vw,3rem)] tracking-[clamp(0.12em,1.6vw,0.45em)]">
           M U S I C O T E C A
         </h1>
 
