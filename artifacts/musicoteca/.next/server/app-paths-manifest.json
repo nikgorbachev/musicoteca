@@ -1,4 +1,8 @@
 {
+  "/search/page": "app/search/page.js",
   "/api/exhibit/[trackId]/route": "app/api/exhibit/[trackId]/route.js",
-  "/api/search/route": "app/api/search/route.js"
+  "/exhibit/[trackId]/page": "app/exhibit/[trackId]/page.js",
+  "/api/context/route": "app/api/context/route.js",
+  "/api/search/route": "app/api/search/route.js",
+  "/page": "app/page.js"
 }

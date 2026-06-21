@@ -283,7 +283,10 @@ async function fetchWikipedia(
   const musicWords = [
     "song", "single", "album", "band", "group", "singer", "musician",
     "composer", "released", "recorded",
-    "песня", "группа", "певец", "альбом", "музыкант",
+    // Russian: stems/inflected forms (substring match) to survive declension
+    "песн", "песен", "групп", "альбом", "сингл", "миньон",
+    "певец", "певиц", "певц", "музык", "композитор", "исполн",
+    "выпущен", "выпуск", "записан", "запис", "пластинк",
     "canzone", "cantante", "gruppo", "musicista",
     "chanson", "chanteur", "chanteuse", "groupe",
     "lied", "sänger", "sängerin", "gruppe",
@@ -303,9 +306,15 @@ async function fetchWikipedia(
     const e = extract.toLowerCase();
     return disambigMarkers.some((m) => e.includes(m));
   };
+  // Cyrillic nouns decline (Пугачёва → Пугачёвой), so match on a stem for
+  // Russian tokens; Latin tokens stay exact to avoid over-matching.
+  const artistStem = (t: string) =>
+    /[\u0400-\u04FF]/.test(t) && t.length >= 6 ? t.slice(0, t.length - 2) : t;
   const mentionsArtist = (extract: string) => {
     const e = norm(extract);
-    return artistTokens.length > 0 && artistTokens.some((t) => e.includes(t));
+    return (
+      artistTokens.length > 0 && artistTokens.some((t) => e.includes(artistStem(t)))
+    );
   };
   const hasMusicWord = (extract: string) => {
     const e = extract.toLowerCase();

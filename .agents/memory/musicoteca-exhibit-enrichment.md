@@ -29,6 +29,21 @@ unknown falls back to English to still pull English Wikipedia content.
 **How to apply:** ISRC→language map only covers clearly monolingual markets; ambiguous
 countries (BE, CH, CA, IN) are intentionally unmapped so they hit the English default.
 
+# Russian wiki matching must be declension-tolerant (stem, not exact substring)
+
+The relevance validators (`mentionsArtist`, `hasMusicWord`) once did exact substring
+matching, which silently rejected CORRECT Russian pages: "Пугачёва" never matches the
+genitive "Пугачёвой", and the music word "песня" never matches "песен".
+
+**Why:** Russian inflects nouns by case (and has fleeting vowels), so the form in a
+Wikipedia extract rarely equals the nominative form from Musixmatch. Exact matching =
+false rejections, which is why "the previous (looser) version felt better for Russian".
+
+**How to apply:** `mentionsArtist` stems Cyrillic artist tokens (len≥6 → drop last 2
+chars); Latin tokens stay EXACT to avoid over-matching (e.g. "queen"→"quee"). `musicWords`
+includes Russian stems/inflected forms (песн/песен/групп/исполн/выпущен/записан…). If
+adding more languages with rich morphology, prefer stems over nominative forms.
+
 # Wikipedia matching MUST validate relevance, not just keyword-in-title
 
 Picking "first search result whose title contains a song/album word" returns wrong
