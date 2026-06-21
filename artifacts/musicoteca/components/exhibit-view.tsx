@@ -30,6 +30,29 @@ export interface ExhibitData {
   artistTranslit: string;
 }
 
+const RU_TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh",
+  з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o",
+  п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts",
+  ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu",
+  я: "ya",
+};
+
+function transliterateRu(text: string): string {
+  return text
+    .split("")
+    .map((ch) => {
+      const lower = ch.toLowerCase();
+      const mapped = RU_TRANSLIT[lower];
+      if (mapped === undefined) return ch;
+      if (mapped === "") return "";
+      return ch === lower
+        ? mapped
+        : mapped.charAt(0).toUpperCase() + mapped.slice(1);
+    })
+    .join("");
+}
+
 function GlobeIcon() {
   return (
     <svg
@@ -49,7 +72,7 @@ function GlobeIcon() {
   );
 }
 
-function renderMarkdown(text: string, lang: string) {
+function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
   return (
     <ReactMarkdown
       components={{
@@ -58,6 +81,11 @@ function renderMarkdown(text: string, lang: string) {
           const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
             entityText,
           )}`;
+          const isNonLatin = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF]/.test(
+            entityText,
+          );
+          const displayText =
+            showTranslit && isNonLatin ? transliterateRu(entityText) : entityText;
           return (
             <a
               href={wikiUrl}
@@ -66,7 +94,7 @@ function renderMarkdown(text: string, lang: string) {
               className="font-bold text-ink underline decoration-warm-grey/40 underline-offset-4 transition-colors hover:decoration-ink dark:text-chalk dark:hover:decoration-chalk"
               title={`Search Wikipedia for ${entityText}`}
             >
-              {children}
+              {displayText}
             </a>
           );
         },
@@ -394,7 +422,7 @@ export function ExhibitView({
             </div>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {renderMarkdown(innerWorld, lang)}
+              {renderMarkdown(innerWorld, lang, showTranslit)}
             </div>
 
             <div className="mt-auto pt-8">
@@ -427,7 +455,7 @@ export function ExhibitView({
             </div>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {renderMarkdown(theMoment, lang)}
+              {renderMarkdown(theMoment, lang, showTranslit)}
             </div>
 
             <div className="mt-auto pt-8">
