@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 
 interface ExhibitTheme {
   theme: string;
@@ -25,42 +26,54 @@ export interface ExhibitData {
   innerWorld: string;
   theMoment: string;
   language: string;
+  titleTranslit: string;
+  artistTranslit: string;
 }
 
-function PlayIcon() {
+function GlobeIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="6 4 20 12 6 20 6 4" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <ellipse cx="12" cy="12" rx="4" ry="9" />
     </svg>
   );
 }
 
-function PauseIcon() {
+function renderMarkdown(text: string, lang: string) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <rect x="6" y="4" width="4" height="16" />
-      <rect x="14" y="4" width="4" height="16" />
-    </svg>
-  );
-}
-
-function AudioPlayer() {
-  const [playing, setPlaying] = useState(false);
-
-  return (
-    <div className="flex items-center gap-4">
-      <button
-        type="button"
-        onClick={() => setPlaying((p) => !p)}
-        aria-label={playing ? "Pause" : "Play"}
-        className="shrink-0 text-ink transition-colors hover:text-warm-grey dark:text-chalk dark:hover:text-cool-grey"
-      >
-        {playing ? <PauseIcon /> : <PlayIcon />}
-      </button>
-      <div className="h-0.5 flex-1 bg-warm-line dark:bg-cool-line">
-        <div className="h-full bg-ink dark:bg-chalk" style={{ width: "0%" }} />
-      </div>
-    </div>
+    <ReactMarkdown
+      components={{
+        strong: ({ children }) => {
+          const entityText = String(children ?? "");
+          const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
+            entityText,
+          )}`;
+          return (
+            <a
+              href={wikiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-ink underline decoration-warm-grey/40 underline-offset-4 transition-colors hover:decoration-ink dark:text-chalk dark:hover:decoration-chalk"
+              title={`Search Wikipedia for ${entityText}`}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {text}
+    </ReactMarkdown>
   );
 }
 
@@ -76,14 +89,7 @@ function ListenButton() {
 }
 
 const PANEL_BASE =
-  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 pb-12 pt-16 md:w-auto md:snap-align-none md:px-8";
-
-function toParagraphs(text: string): string[] {
-  return text
-    .split(/\n\n+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 pb-16 pt-16 md:w-auto md:snap-align-none md:px-8";
 
 export function ExhibitView({
   title,
@@ -95,14 +101,18 @@ export function ExhibitView({
   wikiImage,
   wikiUrl,
   youtubeThumbnail,
+  videoId,
   innerWorld,
   theMoment,
   language,
+  titleTranslit,
+  artistTranslit,
 }: ExhibitData) {
   const router = useRouter();
   const rowRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
+  const [showTranslit, setShowTranslit] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
   const [translation, setTranslation] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -177,10 +187,13 @@ export function ExhibitView({
 
   const isYoutubeThumbnail = !wikiImage && !!youtubeThumbnail;
   const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
-  const innerParas = toParagraphs(innerWorld);
-  const momentParas = toParagraphs(theMoment);
   const lang = language.toLowerCase().slice(0, 2);
   const canTranslate = lang !== "en" && lang !== "" && lyrics.trim().length > 0;
+  const hasTranslit =
+    (!!titleTranslit && titleTranslit !== title) ||
+    (!!artistTranslit && artistTranslit !== artist);
+  const displayTitle = showTranslit && titleTranslit ? titleTranslit : title;
+  const displayArtist = showTranslit && artistTranslit ? artistTranslit : artist;
 
   const handleTranslate = async () => {
     if (showTranslation) {
@@ -262,11 +275,28 @@ export function ExhibitView({
               <div className="aspect-square w-full max-w-sm bg-ink/10 dark:bg-chalk/10" />
             )}
 
-            <h1 className="mt-6 font-serif text-3xl leading-tight text-ink dark:text-chalk">
-              {title}
-            </h1>
+            <div className="mt-6 flex items-start gap-3">
+              <h1 className="font-serif text-3xl leading-tight text-ink dark:text-chalk">
+                {displayTitle}
+              </h1>
+              {hasTranslit && (
+                <button
+                  type="button"
+                  onClick={() => setShowTranslit((v) => !v)}
+                  aria-label="Toggle transliteration"
+                  aria-pressed={showTranslit}
+                  className={`mt-1 shrink-0 transition-colors ${
+                    showTranslit
+                      ? "text-ink dark:text-chalk"
+                      : "text-warm-grey hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+                  }`}
+                >
+                  <GlobeIcon />
+                </button>
+              )}
+            </div>
             <p className="mt-3 text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
-              {artist}
+              {displayArtist}
             </p>
 
             {moods.length > 0 && (
@@ -284,11 +314,16 @@ export function ExhibitView({
 
             <hr className="my-6 border-warm-line dark:border-cool-line" />
 
-            <AudioPlayer />
-
-            <div className="mt-6 whitespace-pre-line text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {lyrics}
-            </div>
+            {videoId && (
+              <a
+                href={`https://youtube.com/watch?v=${videoId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 self-start border border-ink px-4 py-2 text-xs uppercase tracking-[0.25em] text-ink transition-colors hover:bg-ink hover:text-paper dark:border-chalk dark:text-chalk dark:hover:bg-chalk dark:hover:text-night"
+              >
+                ▶ Watch on YouTube
+              </a>
+            )}
 
             {canTranslate && (
               <div className="mt-4">
@@ -316,6 +351,10 @@ export function ExhibitView({
                 )}
               </div>
             )}
+
+            <div className="mt-6 whitespace-pre-line text-sm leading-loose text-ink/90 dark:text-chalk/90">
+              {lyrics}
+            </div>
 
             <hr className="my-6 border-warm-line dark:border-cool-line" />
 
@@ -350,14 +389,15 @@ export function ExhibitView({
               {year ? ` · ${year}` : ""}
             </p>
 
+            <div className="mt-4">
+              <ListenButton />
+            </div>
+
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {innerParas.map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
+              {renderMarkdown(innerWorld, lang)}
             </div>
 
             <div className="mt-auto pt-8">
-              <ListenButton />
               {wikiUrl && (
                 <a
                   href={wikiUrl}
@@ -382,14 +422,15 @@ export function ExhibitView({
               {year}
             </p>
 
+            <div className="mt-4">
+              <ListenButton />
+            </div>
+
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {momentParas.map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
+              {renderMarkdown(theMoment, lang)}
             </div>
 
             <div className="mt-auto pt-8">
-              <ListenButton />
               {wikiUrl && (
                 <a
                   href={wikiUrl}

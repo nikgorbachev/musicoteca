@@ -551,7 +551,7 @@ export async function GET(
     paramLang ||
     detected ||
     isrcLang ||
-    (/[\u0400-\u04FF]/.test(title) ? "ru" : "") ||
+    (/[\u0400-\u04FF]/.test(title + artist + album) ? "ru" : "") ||
     "en";
   console.log("language detect:", { paramLang, detected, isrcLang, effLang });
 
@@ -570,6 +570,8 @@ export async function GET(
 
   return NextResponse.json({
     language: effLang,
+    titleTranslit: transliterateRu(title),
+    artistTranslit: transliterateRu(artist),
     lyrics,
     lensExplanation: analysis.lensExplanation,
     moods: analysis.moods,

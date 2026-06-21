@@ -7,6 +7,8 @@ type SearchParamsRecord = { [key: string]: string | string[] | undefined };
 
 interface ExhibitApiResponse {
   language: string;
+  titleTranslit: string;
+  artistTranslit: string;
   lyrics: string;
   lensExplanation: string;
   moods: string[];
@@ -121,6 +123,8 @@ export default async function ExhibitPage({
         innerWorld={innerWorld}
         theMoment={theMoment}
         language={viewLang}
+        titleTranslit={ex.titleTranslit || title}
+        artistTranslit={ex.artistTranslit || artist}
       />
     );
   } catch {

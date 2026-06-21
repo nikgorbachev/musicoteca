@@ -59,6 +59,22 @@ AND a music word — `nameMatch && hasMusicWord`. Always drop disambiguation pag
 the summary API's `type === "disambiguation"` field (more robust than phrase matching).
 Returning no wiki ("none") is better than returning a confidently-wrong page.
 
+# The context API (Groq) degrades silently to empty panels on rate limit
+
+`app/api/context/route.ts` returns `{innerWorld:"", theMoment:""}` on ANY failure
+(missing key, non-2xx, parse error). Groq's free tier enforces a daily tokens-per-day
+cap (100k TPD on `llama-3.3-70b-versatile`); once hit it returns **429** and the route
+silently yields blank Inner World / The Moment panels — fast (~130ms), looks like a code
+bug but isn't.
+
+**Why:** silent degradation keeps the exhibit page stable when the LLM is unavailable;
+the page-level defaults feed straight into the markdown renderer without crashing.
+
+**How to apply:** when those panels are unexpectedly blank, refresh workflow logs and
+check for a Groq 429 TPD message BEFORE suspecting the code. The cap resets daily
+(partial windows reset in minutes). To debug which branch fired, temporarily log in the
+route's failure paths, then remove the logs.
+
 # Caveat: search result quality is out of scope
 
 Musixmatch's top search result is frequently a karaoke/cover/tribute with a *different*
