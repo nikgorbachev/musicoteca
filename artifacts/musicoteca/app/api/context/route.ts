@@ -18,7 +18,7 @@ interface GroqResponse {
 }
 
 const SYSTEM_PROMPT =
-  "You are a museum audioguide writer. You write in the style of a thoughtful documentary narrator — warm, precise, never sensationalist. You always ground interpretation in documented facts. Return only valid JSON.";
+  "You are a museum audioguide writer. You write in the style of a thoughtful documentary narrator — warm, precise, never sensationalist. You always ground interpretation in documented facts. Return only valid JSON. Never mention Wikipedia, sources, or data availability. Never use phrases like 'the text does not provide' or 'specific details are not available'. Write only what you know, confidently and briefly.";
 
 export async function POST(request: Request) {
   const empty = { innerWorld: "", theMoment: "" };
@@ -35,20 +35,35 @@ export async function POST(request: Request) {
     const key = process.env.GROQ_API_KEY;
     if (!key) return NextResponse.json(empty);
 
-    const userPrompt = `Write two museum placard texts for the song "${title}" by ${artist} (${year}).
+    const userPrompt = `You are writing the wall placard texts for a museum 
+exhibit about the song "${title}" by ${artist} (${year}).
 
-Wikipedia source (${wikiSource} page): ${wikiExtract}
+Background research (${wikiSource} level): ${wikiExtract}
 
 Musixmatch analysis: ${lensExplanation}
 Moods: ${moods.join(", ")}
 
-Return JSON with exactly these two keys:
+Return JSON with exactly two keys:
 
-"innerWorld": 2-3 paragraphs about the artist's personal and creative context at the time of this song. What was happening in their life, career, artistic development? Where were they emotionally and creatively? Ground everything in what the Wikipedia text actually says about this period. Do not invent facts. If the Wikipedia text does not cover the period well, say so briefly and focus on what is known.
+"innerWorld": 2-3 paragraphs written as a museum audioguide narrator. 
+Write only what you actually know from the research provided. 
+Tell the story of the artist's life, creative development, and emotional 
+state around the time of this song. Be specific and evocative. 
+NEVER mention Wikipedia, sources, or what information is or isn't available. 
+NEVER say "the text does not provide" or "specific details are not available". 
+If the research is thin, write what is known confidently and briefly — 
+do not pad with disclaimers. Write as if narrating a documentary.
 
-"theMoment": 2-3 paragraphs about the cultural and historical moment when this song was created. What was the era like? What was happening in the genre, the city, the country? What social or political forces shaped the world this song was born into? Again, ground in the Wikipedia text. Do not invent specific dates or events not mentioned in the source.
+"theMoment": 2-3 paragraphs written as a museum audioguide narrator.
+Describe the cultural, historical, and social world this song was born into.
+The era, the city, the genre, the political climate. Be specific and 
+evocative about what this moment in history felt like.
+NEVER mention Wikipedia, sources, or what information is or isn't available.
+NEVER say "the text does not provide" or "specific details are not available".
+If the research is thin, describe the known historical context of the 
+period and place confidently. Write as if narrating a documentary.
 
-Write in English regardless of the song's language. Museum plaque style — precise, evocative, grounded.`;
+Write in English. Museum wall plaque tone — precise, warm, never academic.`;
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",

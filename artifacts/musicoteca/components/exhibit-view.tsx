@@ -19,6 +19,7 @@ export interface ExhibitData {
   moods: string[];
   themes: ExhibitTheme[];
   wikiImage: string | null;
+  wikiUrl: string | null;
   youtubeThumbnail: string | null;
   videoId: string | null;
   innerWorld: string;
@@ -92,6 +93,7 @@ export function ExhibitView({
   lensExplanation,
   moods,
   wikiImage,
+  wikiUrl,
   youtubeThumbnail,
   innerWorld,
   theMoment,
@@ -173,7 +175,8 @@ export function ExhibitView({
     lastScrollRef.current = top;
   };
 
-  const cover = wikiImage ?? youtubeThumbnail ?? null;
+  const isYoutubeThumbnail = !wikiImage && !!youtubeThumbnail;
+  const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
   const innerParas = toParagraphs(innerWorld);
   const momentParas = toParagraphs(theMoment);
   const lang = language.toLowerCase().slice(0, 2);
@@ -244,15 +247,19 @@ export function ExhibitView({
           className={`${PANEL_BASE} ${panel1Flex}`}
         >
           <div className="flex h-full w-full flex-col">
-            {cover ? (
+            {coverSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={cover}
+                src={coverSrc}
                 alt={`${title} cover`}
-                className="aspect-square w-full max-w-sm object-cover"
+                className={
+                  isYoutubeThumbnail
+                    ? "w-full max-w-sm object-contain"
+                    : "aspect-square w-full max-w-sm object-cover"
+                }
               />
             ) : (
-              <div className="aspect-square w-full max-w-sm bg-night" />
+              <div className="aspect-square w-full max-w-sm bg-ink/10 dark:bg-chalk/10" />
             )}
 
             <h1 className="mt-6 font-serif text-3xl leading-tight text-ink dark:text-chalk">
@@ -351,6 +358,16 @@ export function ExhibitView({
 
             <div className="mt-auto pt-8">
               <ListenButton />
+              {wikiUrl && (
+                <a
+                  href={wikiUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 block text-xs uppercase tracking-[0.25em] text-warm-grey/60 transition-colors hover:text-warm-grey dark:text-cool-grey/60 dark:hover:text-cool-grey"
+                >
+                  source: wikipedia ↗
+                </a>
+              )}
             </div>
           </div>
         </section>
@@ -373,6 +390,16 @@ export function ExhibitView({
 
             <div className="mt-auto pt-8">
               <ListenButton />
+              {wikiUrl && (
+                <a
+                  href={wikiUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 block text-xs uppercase tracking-[0.25em] text-warm-grey/60 transition-colors hover:text-warm-grey dark:text-cool-grey/60 dark:hover:text-cool-grey"
+                >
+                  source: wikipedia ↗
+                </a>
+              )}
             </div>
           </div>
         </section>

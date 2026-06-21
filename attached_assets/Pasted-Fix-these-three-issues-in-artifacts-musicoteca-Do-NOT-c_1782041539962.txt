@@ -1,0 +1,136 @@
+Fix these three issues in artifacts/musicoteca/. 
+Do NOT change design, layout, or theme system.
+
+--- FIX 1: Groq prompt — remove meta-commentary about Wikipedia ---
+
+In app/api/context/route.ts, replace the userPrompt string with this:
+
+const userPrompt = `You are writing the wall placard texts for a museum 
+exhibit about the song "${title}" by ${artist} (${year}).
+
+Background research (${wikiSource} level): ${wikiExtract}
+
+Musixmatch analysis: ${lensExplanation}
+Moods: ${moods.join(", ")}
+
+Return JSON with exactly two keys:
+
+"innerWorld": 2-3 paragraphs written as a museum audioguide narrator. 
+Write only what you actually know from the research provided. 
+Tell the story of the artist's life, creative development, and emotional 
+state around the time of this song. Be specific and evocative. 
+NEVER mention Wikipedia, sources, or what information is or isn't available. 
+NEVER say "the text does not provide" or "specific details are not available". 
+If the research is thin, write what is known confidently and briefly — 
+do not pad with disclaimers. Write as if narrating a documentary.
+
+"theMoment": 2-3 paragraphs written as a museum audioguide narrator.
+Describe the cultural, historical, and social world this song was born into.
+The era, the city, the genre, the political climate. Be specific and 
+evocative about what this moment in history felt like.
+NEVER mention Wikipedia, sources, or what information is or isn't available.
+NEVER say "the text does not provide" or "specific details are not available".
+If the research is thin, describe the known historical context of the 
+period and place confidently. Write as if narrating a documentary.
+
+Write in English. Museum wall plaque tone — precise, warm, never academic.`;
+
+Also add at the end of the system prompt:
+"Never mention Wikipedia, sources, or data availability. 
+Never use phrases like 'the text does not provide' or 
+'specific details are not available'. Write only what you know, 
+confidently and briefly."
+
+--- FIX 2: Add Wikipedia source links at bottom of context panels ---
+
+In components/exhibit-view.tsx:
+
+The ExhibitView component already receives wikiSource and wikiImage.
+Add a new prop: wikiUrl (string | null) — pass it from the page.
+
+In app/api/exhibit/[trackId]/route.ts:
+When wikiSummary is fetched successfully, also extract the page URL.
+The Wikipedia REST API summary response includes:
+  content_urls.desktop.page
+Add wikiUrl to the return value of fetchWikipedia and include it 
+in the GET response JSON.
+
+In app/exhibit/[trackId]/page.tsx:
+Pass wikiUrl as a prop to ExhibitView.
+
+In components/exhibit-view.tsx:
+At the bottom of Panel 2 (Inner World) and Panel 3 (The Moment),
+below the ListenButton, add:
+{wikiUrl && (
+  
+    href={wikiUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="mt-4 block text-xs uppercase tracking-[0.25em] 
+    text-warm-grey/60 hover:text-warm-grey 
+    dark:text-cool-grey/60 dark:hover:text-cool-grey 
+    transition-colors"
+  >
+    source: wikipedia ↗
+  </a>
+)}
+
+--- FIX 3: Exhibit → Search → Back returns to exhibit ---
+
+In app/search/page.tsx:
+When navigating to an exhibit result, use router.push() as before.
+
+The back button in exhibit-view.tsx currently navigates to /search.
+Change it to navigate to router.back() instead of router.push('/search').
+This preserves the browser history stack so pressing back from 
+search returns to the exhibit.
+
+Specifically in components/exhibit-view.tsx, find the search button 
+onClick handler and change:
+  router.push('/search')
+to:
+  router.back()
+
+Wait — actually the button should still go TO /search when clicked 
+(forward navigation). The issue is that /search currently has no 
+back button that returns to the exhibit.
+
+Instead: in app/search/page.tsx, add a back arrow button top-left 
+(same style as the search button in exhibit) that calls router.back().
+This way: exhibit → click search button → /search page → 
+click back arrow → returns to exhibit.
+
+--- FIX 4: Cover image — don't crop YouTube thumbnails to square ---
+
+In components/exhibit-view.tsx, find the cover image element.
+
+Currently it has: className="aspect-square w-full object-cover"
+
+Change the image rendering logic:
+
+const isYoutubeThumbnail = !wikiImage && !!youtubeThumbnail;
+const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
+
+If coverSrc comes from wikiImage (square artist photo):
+  className="aspect-square w-full object-cover"
+
+If coverSrc comes from youtubeThumbnail (16:9):
+  className="w-full object-contain" (no aspect-square, no cropping)
+
+If no image at all: show a dark placeholder div, 
+  className="aspect-square w-full bg-ink/10 dark:bg-chalk/10"
+
+Implementation:
+{coverSrc ? (
+  <img
+    src={coverSrc}
+    alt={`${title} cover`}
+    className={isYoutubeThumbnail 
+      ? "w-full object-contain" 
+      : "aspect-square w-full object-cover"}
+  />
+) : (
+  <div className="aspect-square w-full bg-ink/10 dark:bg-chalk/10" />
+)}
+
+Do NOT change any other styling or layout.

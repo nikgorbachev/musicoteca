@@ -175,6 +175,7 @@ interface WikiResult {
   wikiExtract: string;
   wikiImage: string | null;
   wikiSource: WikiSource;
+  wikiUrl: string | null;
 }
 
 interface WikiSearchResponse {
@@ -185,6 +186,7 @@ interface WikiSummaryResponse {
   extract?: string;
   thumbnail?: { source?: string };
   type?: string;
+  content_urls?: { desktop?: { page?: string } };
 }
 
 function wikiSubdomain(language: string, title: string): string {
@@ -235,7 +237,12 @@ async function searchWiki(sub: string, query: string): Promise<string[]> {
 async function wikiSummary(
   sub: string,
   title: string,
-): Promise<{ extract: string; image: string | null; type: string } | null> {
+): Promise<{
+  extract: string;
+  image: string | null;
+  type: string;
+  url: string | null;
+} | null> {
   const url = `https://${sub}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
     title,
   )}`;
@@ -249,6 +256,7 @@ async function wikiSummary(
     extract: data.extract ?? "",
     image: data.thumbnail?.source ?? null,
     type: data.type ?? "standard",
+    url: data.content_urls?.desktop?.page ?? null,
   };
 }
 
@@ -337,7 +345,12 @@ async function fetchWikipedia(
       if (s.type === "disambiguation" || isDisambig(s.extract)) continue;
       if (!validate(s.extract, cand)) continue;
       console.log(`[wiki] matched ${source} page:`, cand);
-      return { wikiExtract: s.extract, wikiImage: s.image, wikiSource: source };
+      return {
+        wikiExtract: s.extract,
+        wikiImage: s.image,
+        wikiSource: source,
+        wikiUrl: s.url,
+      };
     }
     return null;
   };
@@ -406,7 +419,7 @@ async function fetchWikipedia(
   }
 
   console.log("[wiki] no match found");
-  return { wikiExtract: "", wikiImage: null, wikiSource: "none" };
+  return { wikiExtract: "", wikiImage: null, wikiSource: "none", wikiUrl: null };
 }
 
 // ---- YouTube ----
@@ -496,6 +509,7 @@ export async function GET(
     wikiExtract: "",
     wikiImage: null,
     wikiSource: "none",
+    wikiUrl: null,
   };
   try {
     wiki = await fetchWikipedia(effLang, title, album, artist);
@@ -512,6 +526,7 @@ export async function GET(
     wikiExtract: wiki.wikiExtract,
     wikiImage: wiki.wikiImage,
     wikiSource: wiki.wikiSource,
+    wikiUrl: wiki.wikiUrl,
     videoId: yt.videoId,
     youtubeThumbnail: yt.youtubeThumbnail,
   });

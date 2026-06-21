@@ -70,8 +70,8 @@ export default function SearchPage() {
       <div className="flex items-center gap-4 border-b border-ink/70 py-4 dark:border-chalk/60">
         <button
           type="button"
-          onClick={() => router.push("/")}
-          aria-label="Back home"
+          onClick={() => router.back()}
+          aria-label="Back"
           className="shrink-0 text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
         >
           <svg
