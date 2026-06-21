@@ -1,0 +1,101 @@
+Fix image fetching in artifacts/musicoteca/app/api/exhibit/[trackId]/route.ts.
+Do NOT change anything else.
+
+--- THE CORE PROBLEM ---
+
+Currently fetchWikipedia returns wikiImage from the FIRST matched page.
+If the song page has no image, we stop there and return null.
+We need to collect images from ALL fallback levels and return 
+the best one available.
+
+--- FIX 1: Collect images across all fallback levels ---
+
+Change WikiResult to add separate image fields:
+interface WikiResult {
+  wikiExtract: string;
+  wikiImage: string | null;      // best image found at any level
+  wikiImageSong: string | null;  // image from song page specifically  
+  wikiImageAlbum: string | null; // image from album page
+  wikiImageArtist: string | null;// image from artist page
+  wikiSource: WikiSource;
+  wikiUrl: string | null;
+}
+
+In fetchWikipedia, instead of returning immediately on first match,
+collect results from all three levels (song, album, artist) that 
+successfully validate, then:
+- Use the song extract as wikiExtract if found, else album, else artist
+- Use the first non-null image found in order: song → album → artist
+- Return wikiImage as that best image
+
+Restructure fetchWikipedia to run all three searches independently
+and store results, then combine:
+
+let songResult: { extract: string; image: string|null; url: string|null } | null = null;
+let albumResult: { extract: string; image: string|null; url: string|null } | null = null;  
+let artistResult: { extract: string; image: string|null; url: string|null } | null = null;
+
+// ... run C1 song search, store in songResult if found
+// ... run C2 album search, store in albumResult if found
+// ... run C3 artist search, store in artistResult if found
+
+// Then combine:
+const bestExtract = songResult?.extract || albumResult?.extract || artistResult?.extract || "";
+const bestImage = songResult?.image ?? albumResult?.image ?? artistResult?.image ?? null;
+const bestUrl = songResult?.url ?? albumResult?.url ?? artistResult?.url ?? null;
+const bestSource: WikiSource = songResult ? "song" : albumResult ? "album" : artistResult ? "artist" : "none";
+
+return {
+  wikiExtract: bestExtract,
+  wikiImage: bestImage,
+  wikiSource: bestSource,
+  wikiUrl: bestSource !== "none" ? bestUrl : null,
+};
+
+IMPORTANT: Don't return early after finding song — continue to 
+album and artist searches even if song was found, 
+so we always have all images available.
+
+--- FIX 2: Better artist name matching to avoid wrong language articles ---
+
+The problem: "Аквариум" matches English band "Aquarium". 
+"До свидания" matches "Мэри Поппинс, до свидания".
+
+In the validate function inside tryCandidates, add a stricter check:
+When sub is "ru", reject any candidate whose normalized title 
+contains NO Cyrillic characters at all.
+
+Add this check at the top of the validate callback for song and album:
+if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
+
+Also for artist search when sub is "ru":
+if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
+
+--- FIX 3: Ensure YouTube thumbnail is true final fallback ---
+
+In the GET route handler at the bottom, when building the response:
+The YouTube thumbnail should ONLY be used as cover if wikiImage is null.
+This is already the frontend logic but make it explicit in the response:
+
+Return both fields separately so frontend can decide:
+wikiImage: wiki.wikiImage,           // null if no wiki image found
+youtubeThumbnail: yt.youtubeThumbnail, // always returned if found
+
+The frontend already handles: coverSrc = wikiImage ?? youtubeThumbnail ?? null
+So if wikiImage is null AND youtubeThumbnail exists, it will show YouTube.
+Verify this logic is correct in components/exhibit-view.tsx — 
+if wikiImage is null and youtubeThumbnail is not null, 
+coverSrc should be youtubeThumbnail. Confirm and fix if needed.
+
+--- FIX 4: Tighten "До свидания" type false matches ---
+
+In the song search validation, add: if the candidate title contains 
+a comma AND the normTitle does NOT contain a comma, 
+and the candidate title has significantly more words than normTitle,
+deprioritize it (don't return false, just push to end of candidates).
+
+Simple heuristic: in the ranked sort, penalize candidates whose 
+word count is more than 3 words longer than the search title:
+const titleWordCount = normTitle.split(" ").length;
+const candWordCount = norm(t).split(" ").length;
+if (candWordCount > titleWordCount + 3) score -= 2;

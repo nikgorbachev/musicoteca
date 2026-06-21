@@ -174,6 +174,9 @@ type WikiSource = "song" | "album" | "artist" | "none";
 interface WikiResult {
   wikiExtract: string;
   wikiImage: string | null;
+  wikiImageSong?: string | null;
+  wikiImageAlbum?: string | null;
+  wikiImageArtist?: string | null;
   wikiSource: WikiSource;
   wikiUrl: string | null;
 }
@@ -364,7 +367,7 @@ async function fetchWikipedia(
     candidates: string[],
     source: WikiSource,
     validate: (extract: string, candTitle: string) => boolean,
-  ): Promise<WikiResult | null> => {
+  ): Promise<{ extract: string; image: string | null; url: string | null } | null> => {
     const seen = new Set<string>();
     for (const cand of candidates) {
       if (!cand || seen.has(cand)) continue;
@@ -379,14 +382,19 @@ async function fetchWikipedia(
       // body (truncated). Fall back to the summary if the fuller fetch fails.
       const full = await fetchFullExtract(sub, cand);
       return {
-        wikiExtract: full.length > s.extract.length ? full : s.extract,
-        wikiImage: s.image,
-        wikiSource: source,
-        wikiUrl: s.url,
+        extract: full.length > s.extract.length ? full : s.extract,
+        image: s.image,
+        url: s.url,
       };
     }
     return null;
   };
+
+  // Run all three searches independently and collect their results so the best
+  // image can be drawn from any level even if the song page itself has none.
+  let songResult: { extract: string; image: string | null; url: string | null } | null = null;
+  let albumResult: { extract: string; image: string | null; url: string | null } | null = null;
+  let artistResult: { extract: string; image: string | null; url: string | null } | null = null;
 
   // C1 — song
   if (title) {
@@ -405,9 +413,17 @@ async function fetchWikipedia(
       direct.push(titleWords.slice(-2).join(" ")); // last two words
     }
 
-    const score = (t: string) =>
-      (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
-      (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0);
+    const titleWordCount = normTitle.split(" ").length;
+    const score = (t: string) => {
+      let s =
+        (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
+        (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0);
+      // Deprioritize candidates whose title is much longer than the search
+      // title (e.g. "Мэри Поппинс, до свидания" for "До свидания").
+      const candWordCount = norm(t).split(" ").length;
+      if (candWordCount > titleWordCount + 3) s -= 2;
+      return s;
+    };
 
     const ranked: string[] = [];
     for (const query of queries) {
@@ -419,15 +435,15 @@ async function fetchWikipedia(
     }
     ranked.sort((a, b) => score(b) - score(a));
 
-    const result = await tryCandidates(
+    songResult = await tryCandidates(
       [...direct, ...ranked],
       "song",
       (extract, cand) => {
+        if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
         const titleMatch = !!normTitle && norm(cand).includes(normTitle);
         return mentionsArtist(extract) || (titleMatch && hasMusicWord(extract));
       },
     );
-    if (result) return result;
   }
 
   // C2 — album
@@ -439,11 +455,11 @@ async function fetchWikipedia(
         (normAlbum && norm(t).includes(normAlbum)) ||
         albumWords.some((w) => t.toLowerCase().includes(w)),
     );
-    const result = await tryCandidates(candidates, "album", (extract, cand) => {
+    albumResult = await tryCandidates(candidates, "album", (extract, cand) => {
+      if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
       const albumMatch = !!normAlbum && norm(cand).includes(normAlbum);
       return mentionsArtist(extract) || (albumMatch && hasMusicWord(extract));
     });
-    if (result) return result;
   }
 
   // C3 — artist (use a less-generic query on ru, e.g. "Кино группа")
@@ -456,21 +472,46 @@ async function fetchWikipedia(
       const sb = normArtist && norm(b).includes(normArtist) ? 1 : 0;
       return sb - sa;
     });
-    const result = await tryCandidates(
+    artistResult = await tryCandidates(
       [...ranked, artist],
       "artist",
       (extract, cand) => {
+        if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
         const nameMatch =
           mentionsArtist(extract) ||
           (!!normArtist && norm(cand).includes(normArtist));
         return nameMatch && hasMusicWord(extract);
       },
     );
-    if (result) return result;
   }
 
-  console.log("[wiki] no match found");
-  return { wikiExtract: "", wikiImage: null, wikiSource: "none", wikiUrl: null };
+  // Combine: prefer the song extract, but draw the best available image from
+  // any level (song → album → artist) so a song page without art still shows one.
+  const bestExtract =
+    songResult?.extract || albumResult?.extract || artistResult?.extract || "";
+  const bestImage =
+    songResult?.image ?? albumResult?.image ?? artistResult?.image ?? null;
+  const bestUrl =
+    songResult?.url ?? albumResult?.url ?? artistResult?.url ?? null;
+  const bestSource: WikiSource = songResult
+    ? "song"
+    : albumResult
+      ? "album"
+      : artistResult
+        ? "artist"
+        : "none";
+
+  if (bestSource === "none") console.log("[wiki] no match found");
+
+  return {
+    wikiExtract: bestExtract,
+    wikiImage: bestImage,
+    wikiImageSong: songResult?.image ?? null,
+    wikiImageAlbum: albumResult?.image ?? null,
+    wikiImageArtist: artistResult?.image ?? null,
+    wikiSource: bestSource,
+    wikiUrl: bestSource !== "none" ? bestUrl : null,
+  };
 }
 
 // ---- YouTube ----
