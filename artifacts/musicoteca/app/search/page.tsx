@@ -6,10 +6,28 @@ import { useRouter } from "next/navigation";
 
 type SearchResult = {
   trackId: string;
+  commontrackId: string;
   title: string;
   artist: string;
-  coverUrl: string;
+  album: string;
+  year: string;
+  artistId: string;
+  albumId: string;
+  hasLyrics: boolean;
+  language: string;
 };
+
+function exhibitHref(result: SearchResult): string {
+  const params = new URLSearchParams({
+    commontrackId: result.commontrackId,
+    artist: result.artist,
+    title: result.title,
+    album: result.album,
+    year: result.year,
+    language: result.language,
+  });
+  return `/exhibit/${result.trackId}?${params.toString()}`;
+}
 
 export default function SearchPage() {
   const router = useRouter();
@@ -89,25 +107,16 @@ export default function SearchPage() {
             {results.map((result) => (
               <li key={result.trackId}>
                 <Link
-                  href={`/exhibit/${result.trackId}`}
-                  className="flex items-center gap-4 border-b border-warm-line py-4 transition-colors hover:bg-ink/[0.03] dark:border-cool-line dark:hover:bg-chalk/[0.04]"
+                  href={exhibitHref(result)}
+                  className="block border-b border-warm-line py-4 transition-colors hover:bg-ink/[0.03] dark:border-cool-line dark:hover:bg-chalk/[0.04]"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={result.coverUrl}
-                    alt=""
-                    width={48}
-                    height={48}
-                    className="h-12 w-12 shrink-0 object-cover"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate font-serif text-base text-ink dark:text-chalk">
-                      {result.title}
-                    </p>
-                    <p className="truncate text-xs uppercase tracking-[0.2em] text-warm-grey dark:text-cool-grey">
-                      {result.artist}
-                    </p>
-                  </div>
+                  <p className="truncate font-serif text-base text-ink dark:text-chalk">
+                    {result.title}
+                  </p>
+                  <p className="truncate text-xs uppercase tracking-[0.2em] text-warm-grey dark:text-cool-grey">
+                    {result.artist}
+                    {result.album ? ` · ${result.album}` : ""}
+                  </p>
                 </Link>
               </li>
             ))}

@@ -2,34 +2,28 @@
 
 import { useRef, useState } from "react";
 
-const TRACK = {
-  title: "Звезда по имени Солнце",
-  artist: "Кино",
-  year: "1989",
-  place: "Leningrad, USSR",
-  cover: "https://placehold.co/600x600/0D0F14/F0F0ED?text=К",
-};
+interface ExhibitTheme {
+  theme: string;
+  quotes: string[];
+}
 
-const LYRICS = `Lorem ipsum dolor sit amet,
-consectetur adipiscing elit.
-
-Sed do eiusmod tempor incididunt
-ut labore et dolore magna aliqua.
-
-Ut enim ad minim veniam,
-quis nostrud exercitation ullamco.
-
-Duis aute irure dolor in reprehenderit
-in voluptate velit esse cillum.
-
-Excepteur sint occaecat cupidatat
-non proident, sunt in culpa.`;
-
-const LENS_SUMMARY =
-  "A meditation on fate and quiet resistance — a song that turns the ordinary act of waiting into something luminous and almost sacred.";
-
-const LOREM =
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.";
+export interface ExhibitData {
+  trackId: string;
+  title: string;
+  artist: string;
+  album: string;
+  year: string;
+  lyrics: string;
+  lensExplanation: string;
+  moods: string[];
+  themes: ExhibitTheme[];
+  wikiImage: string | null;
+  youtubeThumbnail: string | null;
+  videoId: string | null;
+  innerWorld: string;
+  theMoment: string;
+  language: string;
+}
 
 function PlayIcon() {
   return (
@@ -82,7 +76,25 @@ function ListenButton() {
 const PANEL_BASE =
   "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 py-10 md:w-1/4 md:snap-align-none md:px-8";
 
-export function ExhibitView() {
+function toParagraphs(text: string): string[] {
+  return text
+    .split(/\n\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function ExhibitView({
+  title,
+  artist,
+  year,
+  lyrics,
+  lensExplanation,
+  moods,
+  wikiImage,
+  youtubeThumbnail,
+  innerWorld,
+  theMoment,
+}: ExhibitData) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -91,6 +103,10 @@ export function ExhibitView() {
     if (!el) return;
     setActive(Math.round(el.scrollLeft / el.clientWidth));
   };
+
+  const cover = wikiImage ?? youtubeThumbnail ?? null;
+  const innerParas = toParagraphs(innerWorld);
+  const momentParas = toParagraphs(theMoment);
 
   return (
     <main className="relative h-screen overflow-hidden">
@@ -102,25 +118,43 @@ export function ExhibitView() {
         {/* Panel 1 — SONG */}
         <section className={PANEL_BASE}>
           <div className="mx-auto flex h-full max-w-md flex-col">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={TRACK.cover}
-              alt={`${TRACK.title} cover`}
-              className="aspect-square w-full object-cover"
-            />
+            {cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cover}
+                alt={`${title} cover`}
+                className="aspect-square w-full object-cover"
+              />
+            ) : (
+              <div className="aspect-square w-full bg-night" />
+            )}
+
             <h1 className="mt-6 font-serif text-3xl leading-tight text-ink dark:text-chalk">
-              {TRACK.title}
+              {title}
             </h1>
             <p className="mt-3 text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
-              {TRACK.artist}
+              {artist}
             </p>
+
+            {moods.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                {moods.map((mood) => (
+                  <span
+                    key={mood}
+                    className="text-xs uppercase tracking-[0.2em] text-warm-grey dark:text-cool-grey"
+                  >
+                    {mood}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <hr className="my-6 border-warm-line dark:border-cool-line" />
 
             <AudioPlayer />
 
             <div className="mt-6 whitespace-pre-line text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              {LYRICS}
+              {lyrics}
             </div>
 
             <hr className="my-6 border-warm-line dark:border-cool-line" />
@@ -129,7 +163,7 @@ export function ExhibitView() {
               Lens
             </p>
             <p className="mt-3 font-serif text-base italic leading-relaxed text-ink dark:text-chalk">
-              {LENS_SUMMARY}
+              {lensExplanation}
             </p>
           </div>
         </section>
@@ -141,12 +175,14 @@ export function ExhibitView() {
               Inner World
             </p>
             <p className="mt-2 text-sm text-warm-grey dark:text-cool-grey">
-              {TRACK.artist} · {TRACK.year}
+              {artist}
+              {year ? ` · ${year}` : ""}
             </p>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              <p>{LOREM}</p>
-              <p>{LOREM}</p>
+              {innerParas.map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
             </div>
 
             <div className="mt-auto pt-8">
@@ -162,12 +198,13 @@ export function ExhibitView() {
               The Moment
             </p>
             <p className="mt-2 text-sm text-warm-grey dark:text-cool-grey">
-              {TRACK.place} · {TRACK.year}
+              {year}
             </p>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
-              <p>{LOREM}</p>
-              <p>{LOREM}</p>
+              {momentParas.map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
             </div>
 
             <div className="mt-auto pt-8">

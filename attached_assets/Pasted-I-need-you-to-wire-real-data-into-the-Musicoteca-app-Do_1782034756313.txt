@@ -1,0 +1,235 @@
+I need you to wire real data into the Musicoteca app.
+Do NOT change any design, layout, or styling.
+Only add API routes and update data fetching.
+
+Work only inside artifacts/musicoteca/.
+
+---
+
+STEP 1: CREATE /api/search/route.ts
+
+Replace the stub with real Musixmatch search.
+
+Endpoint: GET /api/search?q=...
+
+Call:
+https://api.musixmatch.com/ws/1.1/track.search
+  ?q_track={q}
+  &page_size=8
+  &page=1
+  &s_track_rating=desc
+  &f_has_lyrics=1
+  &apikey={MUSIXMATCH_API_KEY}
+
+Return shape:
+{
+  results: Array<{
+    trackId: string        // track.track_id
+    commontrackId: string  // track.commontrack_id
+    title: string          // track.track_name
+    artist: string         // track.artist_name
+    album: string          // track.album_name
+    year: string           // first 4 chars of track.first_release_date, or ""
+    artistId: string       // track.artist_id
+    albumId: string        // track.album_id
+    hasLyrics: boolean     // track.has_lyrics === 1
+    language: string       // track.track_language or ""
+  }>
+}
+
+If MUSIXMATCH_API_KEY is missing or call fails, return { results: [], error: "search unavailable" }
+
+---
+
+STEP 2: CREATE /api/exhibit/[trackId]/route.ts
+
+This is the main data-fetching route. It runs ALL fetches in parallel and returns everything the exhibit page needs in one call.
+
+GET /api/exhibit/[trackId]?commontrackId=...&artist=...&title=...&album=...&year=...&language=...
+
+Do ALL of these fetches, use Promise.allSettled so one failure doesn't break others:
+
+A) MUSIXMATCH LYRICS
+GET https://api.musixmatch.com/ws/1.1/track.lyrics.get
+  ?track_id={trackId}&apikey={MUSIXMATCH_API_KEY}
+Extract: body.lyrics.lyrics_body
+
+B) MUSIXMATCH ANALYSIS
+GET https://api.musixmatch.com/ws/1.1/track.lyrics.analysis.get
+  ?track_id={trackId}&apikey={MUSIXMATCH_API_KEY}
+Extract:
+  body.analysis.meaning.explanation  → lensExplanation
+  body.analysis.moods.main_moods     → moods (string[])
+  body.analysis.themes.main_themes   → themes (array of {theme, quotes})
+
+C) WIKIPEDIA — search in the song's language, with fallbacks
+The language param determines which Wikipedia subdomain to use:
+  ru → ru.wikipedia.org
+  it → it.wikipedia.org
+  fr → fr.wikipedia.org
+  de → de.wikipedia.org
+  default → en.wikipedia.org
+
+Try in this order, stop at first hit:
+
+C1) Search for song title:
+GET https://{lang}.wikipedia.org/w/api.php
+  ?action=query&list=search
+  &srsearch={title}&srnamespace=0&srlimit=5&format=json
+Pick the result whose title contains words like:
+  "song", "single", "песня", "singolo", "chanson", "Lied"
+If found, fetch:
+GET https://{lang}.wikipedia.org/api/rest_v1/page/summary/{encodedTitle}
+Extract: extract, thumbnail.source
+
+C2) If no song result, search for album:
+Same search API with {album} as query
+Pick result with "album" / "альбом" / "album" in title
+Fetch summary as above
+
+C3) If no album result, fetch artist page directly:
+GET https://{lang}.wikipedia.org/api/rest_v1/page/summary/{encodedArtist}
+Extract: extract, thumbnail.source
+
+Store:
+  wikiExtract: string (the extract text, may be long — keep all of it)
+  wikiImage: string | null (thumbnail.source URL)
+  wikiSource: "song" | "album" | "artist" | "none"
+
+D) YOUTUBE SEARCH
+GET https://www.googleapis.com/youtube/v3/search
+  ?part=snippet
+  &q={artist}+{title}+official
+  &type=video
+  &maxResults=1
+  &key={YOUTUBE_API_KEY}
+Extract:
+  videoId: items[0].id.videoId
+  youtubeThumbnail: items[0].snippet.thumbnails.high.url
+
+---
+
+STEP 3: CREATE /api/context/route.ts
+
+POST endpoint that calls Groq to generate Inner World and The Moment texts.
+
+Request body:
+{
+  title: string
+  artist: string
+  year: string
+  language: string
+  wikiExtract: string
+  wikiSource: "song" | "album" | "artist" | "none"
+  lensExplanation: string
+  moods: string[]
+}
+
+Call Groq API (use fetch, not SDK):
+POST https://api.groq.com/openai/v1/chat/completions
+Headers:
+  Authorization: Bearer {GROQ_API_KEY}
+  Content-Type: application/json
+Body:
+{
+  model: "llama-3.3-70b-versatile",
+  max_tokens: 1000,
+  response_format: { type: "json_object" },
+  messages: [
+    {
+      role: "system",
+      content: "You are a museum audioguide writer. You write in the style of a thoughtful documentary narrator — warm, precise, never sensationalist. You always ground interpretation in documented facts. Return only valid JSON."
+    },
+    {
+      role: "user",
+      content: `Write two museum placard texts for the song "${title}" by ${artist} (${year}).
+
+Wikipedia source (${wikiSource} page): ${wikiExtract}
+
+Musixmatch analysis: ${lensExplanation}
+Moods: ${moods.join(", ")}
+
+Return JSON with exactly these two keys:
+
+"innerWorld": 2-3 paragraphs about the artist's personal and creative context at the time of this song. What was happening in their life, career, artistic development? Where were they emotionally and creatively? Ground everything in what the Wikipedia text actually says about this period. Do not invent facts. If the Wikipedia text does not cover the period well, say so briefly and focus on what is known.
+
+"theМoment": 2-3 paragraphs about the cultural and historical moment when this song was created. What was the era like? What was happening in the genre, the city, the country? What social or political forces shaped the world this song was born into? Again, ground in the Wikipedia text. Do not invent specific dates or events not mentioned in the source.
+
+Write in English regardless of the song's language. Museum plaque style — precise, evocative, grounded.`
+    }
+  ]
+}
+
+Parse response.choices[0].message.content as JSON.
+Return { innerWorld: string, theМoment: string }
+On any error return { innerWorld: "", theМoment: "" }
+
+---
+
+STEP 4: UPDATE /app/exhibit/[trackId]/page.tsx
+
+This is a server component. It should:
+
+1. Read trackId from params, and query params: commontrackId, artist, title, album, year, language
+2. Call /api/exhibit/[trackId] with those params (server-side fetch to own route)
+3. Call /api/context with POST (server-side)
+4. Pass all data as props to ExhibitView
+
+Data to pass to ExhibitView:
+{
+  trackId, title, artist, album, year,
+  lyrics: string
+  lensExplanation: string
+  moods: string[]
+  themes: Array<{theme: string, quotes: string[]}>
+  wikiImage: string | null
+  youtubeThumbnail: string | null
+  videoId: string | null
+  innerWorld: string
+  theMoment: string
+  language: string
+}
+
+Show a simple loading state while fetching (can use Suspense).
+On error, show "This exhibit could not be loaded" message.
+
+---
+
+STEP 5: UPDATE components/exhibit-view.tsx
+
+Replace all hardcoded fixture data with props.
+The component signature becomes:
+
+interface ExhibitData { ...all fields from step 4... }
+export function ExhibitView(props: ExhibitData) { ... }
+
+Changes:
+- Cover image: use wikiImage if available, else youtubeThumbnail, else null (show a dark placeholder div)
+- Lyrics: use props.lyrics (preserve whitespace-pre-line)
+- Lens section: use props.lensExplanation
+- Inner World panel: use props.innerWorld (render as paragraphs split by \n\n)
+- The Moment panel: use props.theMoment (same)
+- Show props.moods as small tags below the artist name on panel 1 (simple spans, no styling complexity)
+- Keep all existing layout, scroll-snap, dot indicator unchanged
+- Keep ListenButton stubs as-is (we wire those later)
+
+---
+
+STEP 6: UPDATE app/search/page.tsx
+
+Wire real search:
+- Input calls /api/search?q={query} debounced 400ms
+- Each result row shows: title, artist, album
+- Clicking a result navigates to:
+  /exhibit/{trackId}?commontrackId=...&artist=...&title=...&album=...&year=...&language=...
+  (pass all params as query string so the exhibit page has them without an extra lookup)
+
+---
+
+CONSTRAINTS:
+- No database, no caching, no file writes
+- All API keys via process.env only, never in client code
+- All Musixmatch/Groq/YouTube calls in route handlers only
+- If any single fetch fails, degrade gracefully (show empty string or null, not a crash)
+- Do not change tailwind config, globals.css, theme system, or any component not mentioned above
+- Do not install new packages unless absolutely necessary
