@@ -35,6 +35,20 @@ function first(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  ms: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 function ExhibitError() {
   return (
     <main className="flex h-screen items-center justify-center px-6 text-center">
@@ -73,7 +87,11 @@ export default async function ExhibitPage({
     exhibitUrl.searchParams.set("language", language);
     exhibitUrl.searchParams.set("isrc", isrc);
 
-    const exRes = await fetch(exhibitUrl.toString(), { cache: "no-store" });
+    const exRes = await fetchWithTimeout(
+      exhibitUrl.toString(),
+      { cache: "no-store" },
+      25000,
+    );
     if (!exRes.ok) throw new Error("exhibit fetch failed");
     const ex = (await exRes.json()) as ExhibitApiResponse;
 
@@ -81,28 +99,37 @@ export default async function ExhibitPage({
 
     let innerWorld = "";
     let theMoment = "";
-    const ctxRes = await fetch(`${base}/api/context`, {
-      method: "POST",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        artist,
-        year,
-        language: viewLang,
-        wikiExtract: ex.wikiExtract,
-        wikiSource: ex.wikiSource,
-        lensExplanation: ex.lensExplanation,
-        moods: ex.moods,
-      }),
-    });
-    if (ctxRes.ok) {
-      const ctx = (await ctxRes.json()) as {
-        innerWorld?: string;
-        theMoment?: string;
-      };
-      innerWorld = ctx.innerWorld ?? "";
-      theMoment = ctx.theMoment ?? "";
+    try {
+      const ctxRes = await fetchWithTimeout(
+        `${base}/api/context`,
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            artist,
+            year,
+            language: viewLang,
+            wikiExtract: ex.wikiExtract,
+            wikiSource: ex.wikiSource,
+            lensExplanation: ex.lensExplanation,
+            moods: ex.moods,
+          }),
+        },
+        25000,
+      );
+      if (ctxRes.ok) {
+        const ctx = (await ctxRes.json()) as {
+          innerWorld?: string;
+          theMoment?: string;
+        };
+        innerWorld = ctx.innerWorld ?? "";
+        theMoment = ctx.theMoment ?? "";
+      }
+    } catch (e) {
+      // timeout or network error — leave innerWorld/theMoment as ""
+      console.error("context fetch failed:", e);
     }
 
     return (

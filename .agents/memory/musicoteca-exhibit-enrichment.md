@@ -53,11 +53,24 @@ pages (e.g. a German TV show "Sing meinen Song" for a song query, or an electric
 **Why:** Wikipedia search is fuzzy; title-token matching alone is far too permissive.
 
 **How to apply:** After fetching each candidate's REST summary, reject it unless it
-validates. Song/album stage: `mentionsArtist(extract) || (titleMatch && hasMusicWord)`.
+validates. Song/album stage: the candidate page TITLE must contain the song/album title
+(`titleMatch`) FIRST, then `mentionsArtist(extract) || hasMusicWord(extract)`. Do NOT
+accept on `mentionsArtist` alone — that lets the artist's OWN page (e.g. "Монеточка")
+pass as the "song" and feed a bogus concert-photo cover for a song that has no wiki page.
 Artist stage (strictest, since names are often common words): require BOTH name match
 AND a music word — `nameMatch && hasMusicWord`. Always drop disambiguation pages via
 the summary API's `type === "disambiguation"` field (more robust than phrase matching).
 Returning no wiki ("none") is better than returning a confidently-wrong page.
+
+# Cover image cascade excludes the artist portrait on purpose
+
+The exhibit cover image is `songResult.image ?? albumResult.image ?? null` (NOT the
+artist image), and the frontend then falls back to the YouTube thumbnail. So the real
+priority is song-wiki → album-wiki → youtube.
+
+**Why:** an artist portrait (or worse, a wrong page's image) is not a song cover; users
+called it "stupid". The artist extract is still used for the placard text, just never
+for the cover image.
 
 # LLM provider: now Mistral (mistral-small-2503), not Groq
 
@@ -103,6 +116,24 @@ together: (1) the prompt must explicitly demand a single string with `\n\n` betw
 paragraphs, never an array; (2) the route must still coerce array→string as a safety net
 (join paragraphs with `\n\n`). Without the prompt rule, the coercion alone yields broken
 prose with newlines mid-sentence.
+
+# Empty plaques ~50% of the time = truncated JSON, not a network bug
+
+The Inner World / The Moment panels came back blank about half the time. Root cause was
+`max_tokens` set too low for JSON-mode output: the two multi-paragraph fields exceeded the
+cap, the JSON was cut off mid-string, `JSON.parse` threw, and the route silently returned
+`{innerWorld:"",theMoment:""}`. It looked intermittent/network-y but was deterministic
+truncation.
+
+**Why:** `response_format: json_object` still obeys `max_tokens` — hitting the cap yields
+INVALID (truncated) JSON, not a clean shorter object.
+
+**How to apply:** give multi-field JSON generations generous `max_tokens` (context uses
+1200) AND wrap the call+parse in a bounded retry (2 attempts; re-request on null content
+OR parse failure). Size the per-attempt LLM `timeoutMs` (11s) so BOTH attempts fit inside
+the caller's fetch timeout — the SSR exhibit page aborts the context fetch at 25s, so two
+20s attempts would never both run. Mirror that 25s `AbortController` timeout on every SSR
+fetch so a slow LLM degrades to empty panels instead of hanging the whole page render.
 
 # The context API (Groq) degrades silently to empty panels on rate limit
 

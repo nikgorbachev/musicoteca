@@ -77,17 +77,29 @@ period and place confidently. Write as if narrating a documentary.
 
 Write in English. Museum wall plaque tone — precise, warm, never academic.`;
 
-    const content = await mistralChat({
-      maxTokens: 1000,
-      jsonResponse: true,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-    });
-    if (!content) return NextResponse.json(empty);
+    // Two attempts: transient API failures or truncated/invalid JSON on the
+    // first try should not leave the plaques empty during a demo.
+    let parsed: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      const content = await mistralChat({
+        maxTokens: 1200,
+        jsonResponse: true,
+        // ~11s per attempt so both attempts fit inside the page's 25s budget.
+        timeoutMs: 11000,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      if (!content) continue;
+      try {
+        parsed = JSON.parse(content) as Record<string, unknown>;
+      } catch {
+        parsed = null;
+      }
+    }
+    if (!parsed) return NextResponse.json(empty);
 
-    const parsed = JSON.parse(content) as Record<string, unknown>;
     return NextResponse.json({
       innerWorld: stripMarkdown(toText(parsed.innerWorld)),
       theMoment: stripMarkdown(toText(parsed.theMoment ?? parsed["theМoment"])),

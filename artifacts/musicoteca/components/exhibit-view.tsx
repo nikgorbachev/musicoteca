@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
@@ -77,12 +83,19 @@ function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
     <ReactMarkdown
       components={{
         strong: ({ children }) => {
-          const entityText =
-            typeof children === "string"
-              ? children
-              : Array.isArray(children)
-                ? children.map((c) => (typeof c === "string" ? c : "")).join("")
-                : String(children ?? "");
+          // Safely extract plain text from children (may be nested React nodes)
+          const extractText = (node: ReactNode): string => {
+            if (typeof node === "string") return node;
+            if (typeof node === "number") return String(node);
+            if (Array.isArray(node)) return node.map(extractText).join("");
+            if (node && typeof node === "object" && "props" in node) {
+              const el = node as ReactElement<{ children?: ReactNode }>;
+              return extractText(el.props.children);
+            }
+            return "";
+          };
+          const entityText = extractText(children);
+          if (!entityText) return <strong>{children}</strong>;
           const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
             entityText,
           )}`;

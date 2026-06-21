@@ -7,6 +7,7 @@ interface MistralChatOptions {
   messages: MistralMessage[];
   maxTokens: number;
   jsonResponse?: boolean;
+  timeoutMs?: number;
 }
 
 interface MistralResponse {
@@ -30,12 +31,16 @@ export async function mistralChat(
     return null;
   }
 
-  const { messages, maxTokens, jsonResponse = false } = options;
+  const { messages, maxTokens, jsonResponse = false, timeoutMs = 20000 } =
+    options;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(MISTRAL_URL, {
       method: "POST",
       cache: "no-store",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
@@ -56,5 +61,7 @@ export async function mistralChat(
   } catch (err) {
     console.log(`[mistral] error: ${String(err)}`);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

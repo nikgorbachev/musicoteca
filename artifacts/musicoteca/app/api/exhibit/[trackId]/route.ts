@@ -443,8 +443,12 @@ async function fetchWikipedia(
       "song",
       (extract, cand) => {
         if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
+        // The page title MUST contain the song title — otherwise an artist or
+        // unrelated page that merely mentions the artist (e.g. "Монеточка")
+        // would wrongly pass as the song and supply a bogus cover image.
         const titleMatch = !!normTitle && norm(cand).includes(normTitle);
-        return mentionsArtist(extract) || (titleMatch && hasMusicWord(extract));
+        if (!titleMatch) return false;
+        return mentionsArtist(extract) || hasMusicWord(extract);
       },
     );
   }
@@ -460,8 +464,11 @@ async function fetchWikipedia(
     );
     albumResult = await tryCandidates(candidates, "album", (extract, cand) => {
       if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
+      // The page title MUST contain the album title — same guard as the song
+      // level, so an artist page does not slip in as the album cover source.
       const albumMatch = !!normAlbum && norm(cand).includes(normAlbum);
-      return mentionsArtist(extract) || (albumMatch && hasMusicWord(extract));
+      if (!albumMatch) return false;
+      return mentionsArtist(extract) || hasMusicWord(extract);
     });
   }
 
@@ -488,12 +495,12 @@ async function fetchWikipedia(
     );
   }
 
-  // Combine: prefer the song extract, but draw the best available image from
-  // any level (song → album → artist) so a song page without art still shows one.
+  // Combine: prefer the song extract for text. For the cover image, use only
+  // song → album wiki art (never the artist portrait); the frontend falls back
+  // to the YouTube thumbnail when both are null.
   const bestExtract =
     songResult?.extract || albumResult?.extract || artistResult?.extract || "";
-  const bestImage =
-    songResult?.image ?? albumResult?.image ?? artistResult?.image ?? null;
+  const bestImage = songResult?.image ?? albumResult?.image ?? null;
   const bestUrl =
     songResult?.url ?? albumResult?.url ?? artistResult?.url ?? null;
   const bestSource: WikiSource = songResult

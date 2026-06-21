@@ -1,0 +1,179 @@
+Fix two critical issues in artifacts/musicoteca/. No other changes.
+
+--- CRITICAL FIX 1: Context loading fails ~50% of the time ---
+
+In app/exhibit/[trackId]/page.tsx, the context fetch has no timeout
+and fails silently. Fix:
+
+Add a timeout wrapper:
+async function fetchWithTimeout(
+  url: string, 
+  options: RequestInit, 
+  ms: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+Replace the context fetch with:
+try {
+  const ctxRes = await fetchWithTimeout(
+    `${base}/api/context`,
+    {
+      method: "POST",
+      cache: "no-store", 
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title, artist, year, language: viewLang,
+        wikiExtract: ex.wikiExtract,
+        wikiSource: ex.wikiSource,
+        lensExplanation: ex.lensExplanation,
+        moods: ex.moods,
+      }),
+    },
+    25000  // 25 second timeout
+  );
+  if (ctxRes.ok) {
+    const ctx = await ctxRes.json() as { innerWorld?: string; theMoment?: string };
+    innerWorld = ctx.innerWorld ?? "";
+    theMoment = ctx.theMoment ?? "";
+  }
+} catch (e) {
+  // timeout or network error — leave innerWorld/theMoment as ""
+  console.error("context fetch failed:", e);
+}
+
+Also in app/api/context/route.ts, add a timeout to the Mistral call:
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 20000);
+try {
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    signal: controller.signal,
+    headers: { ... },
+    body: JSON.stringify({ ... }),
+  });
+  clearTimeout(timeoutId);
+  // ... rest of existing logic
+} catch (e) {
+  clearTimeout(timeoutId);
+  return NextResponse.json(empty);
+}
+
+Also increase max_tokens to 1200 in context route to avoid 
+truncated JSON that fails to parse.
+
+--- CRITICAL FIX 2: Image cascade broken + [object Object] ---
+
+In app/api/exhibit/[trackId]/route.ts:
+
+The fetchWikipedia function must NOT return early after finding
+the song page. It must continue searching album and artist pages
+to collect their images even when song page is already found.
+
+Restructure fetchWikipedia completely:
+
+async function fetchWikipedia(...): Promise<WikiResult> {
+  const sub = wikiSubdomain(language, title);
+  
+  let songExtract = ""; let songImage: string|null = null; 
+  let songUrl: string|null = null;
+  let albumExtract = ""; let albumImage: string|null = null;
+  let albumUrl: string|null = null;  
+  let artistExtract = ""; let artistImage: string|null = null;
+  let artistUrl: string|null = null;
+
+  // C1 — try song page, store result but DO NOT return
+  if (title) {
+    // ... existing song search logic ...
+    // when a match is found:
+    // songExtract = full; songImage = s.image; songUrl = s.url;
+    // DO NOT return here — continue to C2 and C3
+  }
+
+  // C2 — try album page, store result but DO NOT return  
+  if (album) {
+    // ... existing album search logic ...
+    // albumExtract = full; albumImage = s.image; albumUrl = s.url;
+  }
+
+  // C3 — try artist page, store result
+  if (artist) {
+    // ... existing artist search logic ...
+    // artistExtract = full; artistImage = s.image; artistUrl = s.url;
+  }
+
+  // Combine: best extract = first non-empty; best image = first non-null
+  const wikiExtract = songExtract || albumExtract || artistExtract;
+  const wikiImage = songImage ?? albumImage ?? artistImage;
+  const wikiUrl = (songExtract ? songUrl : albumExtract ? albumUrl : artistUrl);
+  const wikiSource: WikiSource = songExtract ? "song" 
+    : albumExtract ? "album" 
+    : artistExtract ? "artist" 
+    : "none";
+
+  return { wikiExtract, wikiImage, wikiSource, 
+           wikiUrl: wikiExtract ? wikiUrl : null };
+}
+
+IMPORTANT: The tryCandidates helper currently returns WikiResult
+(with full return statement). Change it to return just the 
+matched data or null:
+
+type CandidateMatch = { 
+  extract: string; image: string|null; url: string|null 
+} | null;
+
+async function tryCandidates(
+  candidates: string[],
+  source: WikiSource,
+  validate: (extract: string, candTitle: string) => boolean,
+): Promise<CandidateMatch> {
+  // ... same logic but return { extract, image, url } | null
+  // NOT WikiResult
+}
+
+--- FIX 3: [object Object] in plaque text (ensure this is applied) ---
+
+In components/exhibit-view.tsx, inside renderMarkdown,
+the strong handler must extract text safely from React children.
+
+Replace the entire strong component with:
+
+strong: ({ children }) => {
+  // Safely extract plain text from children (may be React nodes)
+  const extractText = (node: React.ReactNode): string => {
+    if (typeof node === "string") return node;
+    if (typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(extractText).join("");
+    if (node && typeof node === "object" && "props" in (node as object)) {
+      const el = node as React.ReactElement;
+      return extractText(el.props.children);
+    }
+    return "";
+  };
+  const entityText = extractText(children);
+  if (!entityText) return <strong>{children}</strong>;
+  
+  const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(entityText)}`;
+  const isNonLatin = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF]/.test(entityText);
+  const displayText = showTranslit && isNonLatin 
+    ? transliterateRu(entityText) 
+    : entityText;
+  
+  return (
+    <a href={wikiUrl} target="_blank" rel="noopener noreferrer"
+      className="font-bold text-ink underline decoration-warm-grey/40 
+      underline-offset-4 transition-colors hover:decoration-ink 
+      dark:text-chalk dark:hover:decoration-chalk"
+      title={`Search Wikipedia for ${entityText}`}
+    >
+      {displayText}
+    </a>
+  );
+},
