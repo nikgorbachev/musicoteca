@@ -338,10 +338,45 @@ async function fetchWikipedia(
     "può riferirsi a", "peut faire référence", "kann sich auf", "bezeichnet:",
   ];
 
+  // Strip version/remaster/feat qualifiers so noisy Musixmatch titles like
+  // "Imagine - Remastered 2010" and "Поезд в огне (Версия чёрной розы)" still
+  // match their plain Wikipedia page titles.
+  const coreTitle = (t: string) =>
+    t
+      .replace(/\s[-–—]\s.*$/u, "")
+      .replace(/\s*\([^)]*\)\s*$/u, "")
+      .replace(/\s*\[[^\]]*\]\s*$/u, "")
+      .trim();
+
   const normArtist = norm(artist);
   const normTitle = norm(title);
   const normAlbum = norm(album);
+  const normTitleCore = norm(coreTitle(title));
+  const normAlbumCore = norm(coreTitle(album));
   const artistTokens = normArtist.split(" ").filter((w) => w.length >= 4);
+
+  const songQualifiers = [
+    ...songWords, "brano", "musicale", "track", "tune", "композиция",
+  ];
+  const albumQualifiers = [...albumWords, "lp", "ep", "record", "пластинк"];
+
+  // A candidate "precisely" matches when it is exactly the core title, or the
+  // core title followed by a parenthetical qualifier that looks musical
+  // (e.g. "Imagine (song)", "L'anno che verrà (brano musicale)"). This rejects
+  // look-alikes such as "Imagine Dragons" or "Мэри Поппинс, до свидания".
+  const preciseMatch = (cand: string, core: string, quals: string[]) => {
+    if (!core) return false;
+    const nc = norm(cand);
+    if (nc === core) return true;
+    const paren = cand.match(/^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/u);
+    if (paren && norm(paren[1]) === core) {
+      const q = norm(paren[2]);
+      // norm() the qualifier words too so accented entries (e.g. "canción")
+      // still match the diacritic-stripped candidate text.
+      return quals.some((w) => q.includes(norm(w)));
+    }
+    return false;
+  };
 
   const isDisambig = (extract: string) => {
     const e = extract.toLowerCase();
@@ -398,31 +433,36 @@ async function fetchWikipedia(
 
   // C1 — song
   if (title) {
-    const queries = [`${title} ${artist}`.trim(), title];
+    const tCore = coreTitle(title);
+    const queries = [`${tCore} ${artist}`.trim(), tCore];
+    if (title !== tCore) queries.push(title);
     if (sub === "ru") {
-      const tr = transliterateRu(title);
-      if (tr && tr !== title) queries.push(tr);
+      const tr = transliterateRu(tCore);
+      if (tr && tr !== tCore) queries.push(tr);
     }
 
     // Direct-fetch candidates first: Wikipedia redirects resolve on a direct
     // title fetch even when search misses due to alternate/native titles.
-    const direct: string[] = [title, `${artist} ${title}`.trim()];
-    const titleWords = title.split(" ");
+    const direct: string[] = [tCore, `${artist} ${tCore}`.trim()];
+    if (title !== tCore) direct.push(title);
+    const titleWords = tCore.split(" ");
     if (titleWords.length >= 3) {
       direct.push(titleWords.slice(1).join(" ")); // drop leading adjective(s)
       direct.push(titleWords.slice(-2).join(" ")); // last two words
     }
 
-    const titleWordCount = normTitle.split(" ").length;
+    const coreWordCount = normTitleCore.split(" ").length;
     const score = (t: string) => {
       let s =
-        (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
+        (normTitleCore && norm(t).includes(normTitleCore) ? 2 : 0) +
         (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0) +
         (normArtist && norm(t).includes(normArtist.split(" ")[0]) ? 1 : 0);
+      // Strongly prefer the canonical song page over album/look-alike pages.
+      if (preciseMatch(t, normTitleCore, songQualifiers)) s += 3;
       // Deprioritize candidates whose title is much longer than the search
       // title (e.g. "Мэри Поппинс, до свидания" for "До свидания").
       const candWordCount = norm(t).split(" ").length;
-      if (candWordCount > titleWordCount + 3) s -= 2;
+      if (candWordCount > coreWordCount + 3) s -= 2;
       return s;
     };
 
@@ -443,12 +483,18 @@ async function fetchWikipedia(
       "song",
       (extract, cand) => {
         if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
-        // The page title MUST contain the song title — otherwise an artist or
-        // unrelated page that merely mentions the artist (e.g. "Монеточка")
-        // would wrongly pass as the song and supply a bogus cover image.
-        const titleMatch = !!normTitle && norm(cand).includes(normTitle);
-        if (!titleMatch) return false;
-        return mentionsArtist(extract) || hasMusicWord(extract);
+        // Precise: the page IS the song ("Imagine", "Imagine (song)").
+        if (
+          preciseMatch(cand, normTitleCore, songQualifiers) &&
+          hasMusicWord(extract)
+        ) {
+          return true;
+        }
+        // Looser: the song title is embedded in the page title, but only if the
+        // page actually talks about THIS artist — guards against look-alikes
+        // like "Imagine Dragons" or the film "Мэри Поппинс, до свидания".
+        const looseMatch = !!normTitleCore && norm(cand).includes(normTitleCore);
+        return looseMatch && mentionsArtist(extract);
       },
     );
   }
@@ -459,16 +505,22 @@ async function fetchWikipedia(
     console.log("[wiki] album search:", album, "->", titles);
     const candidates = titles.filter(
       (t) =>
-        (normAlbum && norm(t).includes(normAlbum)) ||
+        (normAlbumCore && norm(t).includes(normAlbumCore)) ||
         albumWords.some((w) => t.toLowerCase().includes(w)),
     );
     albumResult = await tryCandidates(candidates, "album", (extract, cand) => {
       if (sub === "ru" && !/[\u0400-\u04FF]/.test(cand)) return false;
-      // The page title MUST contain the album title — same guard as the song
-      // level, so an artist page does not slip in as the album cover source.
-      const albumMatch = !!normAlbum && norm(cand).includes(normAlbum);
-      if (!albumMatch) return false;
-      return mentionsArtist(extract) || hasMusicWord(extract);
+      // Precise album-page match, same shape as the song level.
+      if (
+        preciseMatch(cand, normAlbumCore, albumQualifiers) &&
+        hasMusicWord(extract)
+      ) {
+        return true;
+      }
+      // Looser album-title containment, gated on an artist mention so an
+      // unrelated band page ("Imagine Dragons" for album "Imagine") cannot win.
+      const looseMatch = !!normAlbumCore && norm(cand).includes(normAlbumCore);
+      return looseMatch && mentionsArtist(extract);
     });
   }
 
@@ -539,22 +591,79 @@ async function fetchYouTube(
   key: string | undefined,
 ): Promise<{ videoId: string | null; youtubeThumbnail: string | null }> {
   const empty = { videoId: null, youtubeThumbnail: null };
-  if (!key) return empty;
-  const url = new URL("https://www.googleapis.com/youtube/v3/search");
-  url.searchParams.set("part", "snippet");
-  url.searchParams.set("q", `${artist} ${title} official`.trim());
-  url.searchParams.set("type", "video");
-  url.searchParams.set("maxResults", "1");
-  url.searchParams.set("key", key);
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return empty;
-  const data = (await res.json()) as YouTubeResponse;
-  const item = data.items?.[0];
-  if (!item) return empty;
-  return {
-    videoId: item.id?.videoId ?? null,
-    youtubeThumbnail: item.snippet?.thumbnails?.high?.url ?? null,
-  };
+  const query = `${artist} ${title} official`.trim();
+
+  // Primary: official Data API when a key is present and within quota.
+  if (key) {
+    try {
+      const url = new URL("https://www.googleapis.com/youtube/v3/search");
+      url.searchParams.set("part", "snippet");
+      url.searchParams.set("q", query);
+      url.searchParams.set("type", "video");
+      url.searchParams.set("maxResults", "1");
+      url.searchParams.set("key", key);
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as YouTubeResponse;
+        const id = data.items?.[0]?.id?.videoId ?? null;
+        if (id) {
+          return {
+            videoId: id,
+            youtubeThumbnail:
+              data.items?.[0]?.snippet?.thumbnails?.high?.url ??
+              `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          };
+        }
+      } else {
+        console.log(`[youtube] api not ok: ${res.status}`);
+      }
+    } catch (e) {
+      console.log(`[youtube] api error: ${String(e)}`);
+    }
+  }
+
+  // Fallback: keyless scrape of the results page. Has no daily quota, so the
+  // watch button + thumbnail keep working even with no API key / exhausted
+  // quota (the official Data API allows only ~100 searches/day on free tier).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      },
+    );
+    if (!res.ok) {
+      console.log(`[youtube] scrape not ok: ${res.status}`);
+      return empty;
+    }
+    const html = await res.text();
+    const m =
+      html.match(/"videoId":"([\w-]{11})"/) ||
+      html.match(/\/watch\?v=([\w-]{11})/);
+    if (!m) {
+      console.log("[youtube] scrape: no videoId found");
+      return empty;
+    }
+    const vid = m[1];
+    console.log(`[youtube] scrape matched: ${vid}`);
+    return {
+      videoId: vid,
+      youtubeThumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+    };
+  } catch (e) {
+    console.log(`[youtube] scrape error: ${String(e)}`);
+    return empty;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---- Route ----
@@ -629,6 +738,7 @@ export async function GET(
     themes: analysis.themes,
     wikiExtract: wiki.wikiExtract,
     wikiImage: wiki.wikiImage,
+    wikiImageArtist: wiki.wikiImageArtist ?? null,
     wikiSource: wiki.wikiSource,
     wikiUrl: wiki.wikiExtract.length > 0 ? wiki.wikiUrl : null,
     videoId: yt.videoId,

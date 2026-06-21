@@ -26,6 +26,7 @@ export interface ExhibitData {
   moods: string[];
   themes: ExhibitTheme[];
   wikiImage: string | null;
+  wikiImageArtist: string | null;
   wikiUrl: string | null;
   youtubeThumbnail: string | null;
   videoId: string | null;
@@ -145,6 +146,7 @@ export function ExhibitView({
   lensExplanation,
   moods,
   wikiImage,
+  wikiImageArtist,
   wikiUrl,
   youtubeThumbnail,
   videoId,
@@ -232,7 +234,7 @@ export function ExhibitView({
   };
 
   const isYoutubeThumbnail = !wikiImage && !!youtubeThumbnail;
-  const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
+  const coverSrc = wikiImage ?? youtubeThumbnail ?? wikiImageArtist ?? null;
   const lang = language.toLowerCase().slice(0, 2);
   const canTranslate = lang !== "en" && lang !== "" && lyrics.trim().length > 0;
   const NON_LATIN_RE = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF\uAC00-\uD7AF]/;

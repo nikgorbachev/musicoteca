@@ -1,8 +1,8 @@
-// File: /home/runner/workspace/artifacts/musicoteca/app/api/context/route.ts
-import * as entry from '../../../../../app/api/context/route.js'
+// File: /home/runner/workspace/artifacts/musicoteca/app/api/exhibit/[trackId]/route.ts
+import * as entry from '../../../../../../app/api/exhibit/[trackId]/route.js'
 import type { NextRequest } from 'next/server.js'
 
-type TEntry = typeof import('../../../../../app/api/context/route.js')
+type TEntry = typeof import('../../../../../../app/api/exhibit/[trackId]/route.js')
 
 // Check that the entry is a valid entry
 checkFields<Diff<{

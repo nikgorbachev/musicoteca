@@ -15,6 +15,7 @@ interface ExhibitApiResponse {
   themes: Array<{ theme: string; quotes: string[] }>;
   wikiExtract: string;
   wikiImage: string | null;
+  wikiImageArtist: string | null;
   wikiSource: string;
   wikiUrl: string | null;
   videoId: string | null;
@@ -144,6 +145,7 @@ export default async function ExhibitPage({
         moods={ex.moods ?? []}
         themes={ex.themes ?? []}
         wikiImage={ex.wikiImage ?? null}
+        wikiImageArtist={ex.wikiImageArtist ?? null}
         wikiUrl={ex.wikiUrl ?? null}
         youtubeThumbnail={ex.youtubeThumbnail ?? null}
         videoId={ex.videoId ?? null}

@@ -62,15 +62,41 @@ AND a music word — `nameMatch && hasMusicWord`. Always drop disambiguation pag
 the summary API's `type === "disambiguation"` field (more robust than phrase matching).
 Returning no wiki ("none") is better than returning a confidently-wrong page.
 
-# Cover image cascade excludes the artist portrait on purpose
+# Cover image cascade: song-wiki → album-wiki → youtube → artist photo
 
-The exhibit cover image is `songResult.image ?? albumResult.image ?? null` (NOT the
-artist image), and the frontend then falls back to the YouTube thumbnail. So the real
-priority is song-wiki → album-wiki → youtube.
+The exhibit cover priority is song-wiki image → album-wiki image → YouTube thumbnail →
+artist portrait → none. The artist portrait is the LAST resort only (not the first
+fallback), because a portrait is not a song cover — but it beats showing nothing.
 
-**Why:** an artist portrait (or worse, a wrong page's image) is not a song cover; users
-called it "stupid". The artist extract is still used for the placard text, just never
-for the cover image.
+**Why:** users called a leading artist portrait "stupid", but also disliked blank covers
+when wiki+youtube both miss. The artist extract is always used for placard text; its
+image is only the final cover fallback.
+
+**How to apply:** backend returns `wikiImage` (song/album) AND `wikiImageArtist`
+separately; the frontend computes `wikiImage ?? youtubeThumbnail ?? wikiImageArtist`.
+
+# Match Wikipedia on a CLEANED "core" title, not the raw Musixmatch title
+
+Musixmatch titles carry version noise — "Imagine - Remastered 2010",
+"Поезд в огне (Версия чёрной розы)". Requiring the wiki page title to contain the WHOLE
+raw title makes every candidate fail (no song page found at all). Strip a trailing
+" - <suffix>" and a trailing "(...)"/"[...]" qualifier to get the core title, and use the
+core for queries, direct-fetch candidates, ranking, and validation.
+
+# Validate wiki candidates with precise-or-(loose+artist), never loose `includes` alone
+
+A plain `normCand.includes(normTitle)` is far too permissive: album "Imagine" matched the
+band "Imagine Dragons"; "до свидания" matched the film "Мэри Поппинс, до свидания". The
+robust gate is: accept if `preciseMatch && hasMusicWord`, OR `looseContains && mentionsArtist`.
+
+**preciseMatch** = candidate norm equals the core title, OR candidate is `Core (qualifier)`
+where the parenthetical contains a musical word (song/single/песня/brano/musicale/album…).
+Detect the parenthetical on the RAW candidate before `norm()` — `norm` strips parens, so a
+post-norm "startsWith core + ' ('" check can never fire.
+
+**Why:** loose containment lets a different artist's page (band/film/album) win and supply a
+wrong cover; the artist-mention gate on the loose branch blocks look-alikes while still
+catching embedded-title pages.
 
 # LLM provider: now Mistral (mistral-small-2503), not Groq
 
