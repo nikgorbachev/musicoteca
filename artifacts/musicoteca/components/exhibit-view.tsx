@@ -77,7 +77,12 @@ function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
     <ReactMarkdown
       components={{
         strong: ({ children }) => {
-          const entityText = String(children ?? "");
+          const entityText =
+            typeof children === "string"
+              ? children
+              : Array.isArray(children)
+                ? children.map((c) => (typeof c === "string" ? c : "")).join("")
+                : String(children ?? "");
           const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
             entityText,
           )}`;
@@ -217,9 +222,8 @@ export function ExhibitView({
   const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
   const lang = language.toLowerCase().slice(0, 2);
   const canTranslate = lang !== "en" && lang !== "" && lyrics.trim().length > 0;
-  const hasTranslit =
-    (!!titleTranslit && titleTranslit !== title) ||
-    (!!artistTranslit && artistTranslit !== artist);
+  const NON_LATIN_RE = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF\uAC00-\uD7AF]/;
+  const hasTranslit = NON_LATIN_RE.test(title) || NON_LATIN_RE.test(artist);
   const displayTitle = showTranslit && titleTranslit ? titleTranslit : title;
   const displayArtist = showTranslit && artistTranslit ? artistTranslit : artist;
 

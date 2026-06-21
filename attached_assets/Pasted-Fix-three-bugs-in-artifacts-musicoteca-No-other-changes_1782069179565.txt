@@ -1,0 +1,83 @@
+Fix three bugs in artifacts/musicoteca/. No other changes.
+
+--- FIX 1: [object Object] in plaque text ---
+
+In components/exhibit-view.tsx, inside the renderMarkdown function,
+the strong component receives React children which may not be 
+a plain string. Replace:
+  const entityText = String(children ?? "");
+with:
+  const entityText = typeof children === "string" 
+    ? children 
+    : Array.isArray(children)
+      ? children.map(c => typeof c === "string" ? c : "").join("")
+      : String(children ?? "");
+
+--- FIX 2: Globe icon for non-Cyrillic scripts ---
+
+In components/exhibit-view.tsx, the hasTranslit check currently
+relies on titleTranslit !== title, but transliterateRu returns 
+the original text unchanged for non-Cyrillic scripts (Japanese, 
+Arabic, Chinese etc.), so hasTranslit is false for those.
+
+Change hasTranslit to:
+const NON_LATIN_RE = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF\uAC00-\uD7AF]/;
+const hasTranslit = NON_LATIN_RE.test(title) || NON_LATIN_RE.test(artist);
+
+This shows the globe icon whenever the title or artist contains
+any non-Latin script, regardless of whether transliteration exists.
+
+For the actual displayed text when showTranslit is true:
+If titleTranslit === title (i.e. no transliteration available),
+show title in Latin script via a simple romanization hint, 
+or just keep showing the original — don't show [object Object].
+The safe fallback: if titleTranslit === title, just show title as-is.
+
+--- FIX 3: Wikipedia disambiguation for famous songs ---
+
+In app/api/exhibit/[trackId]/route.ts, in the C1 song search,
+the direct candidates array starts with [title, artist+" "+title].
+For "Imagine" this tries the title directly and hits a 
+disambiguation page which gets rejected.
+
+The search results (from searchWiki) typically include the 
+correctly disambiguated title like "Imagine (John Lennon song)".
+The problem is the scoring function requires songWords in the title
+("song", "single" etc.) — "Imagine (John Lennon song)" scores 
+correctly, but it may be getting filtered out or ranked below 
+the direct title attempt which fails.
+
+Fix: in the tryCandidates function, when a disambiguation page 
+is encountered for a direct-fetch candidate, don't stop —
+continue to the next candidate. This is already the behavior,
+so the real fix is ensuring search results are tried even when
+direct candidates fail.
+
+Verify the flow: if direct candidates [title, artist+" "+title]
+all fail (disambiguation or not found), the code falls through
+to `ranked` (search results). Confirm `ranked` is actually 
+populated and tried. Add a console.log:
+console.log("[wiki] song ranked candidates:", ranked);
+
+If ranked is empty for "Imagine John Lennon", the issue is that
+searchWiki for "Imagine John Lennon" returns results but the 
+score function requires songWords in the title.
+
+Change the score function to also give score 1 if the candidate
+title contains the artist name:
+const score = (t: string) =>
+  (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
+  (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0) +
+  (normArtist && norm(t).includes(normArtist.split(" ")[0]) ? 1 : 0);
+
+And relax the filter from score > 0 to include all candidates 
+from search results, ranked by score, even if score is 0:
+const ranked: string[] = [];
+for (const query of queries) {
+  const titles = await searchWiki(sub, query);
+  for (const t of titles) {
+    if (!ranked.includes(t)) ranked.push(t);
+  }
+}
+// Sort by score descending, highest first
+ranked.sort((a, b) => score(b) - score(a));

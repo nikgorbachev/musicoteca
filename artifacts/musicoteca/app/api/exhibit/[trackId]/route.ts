@@ -417,7 +417,8 @@ async function fetchWikipedia(
     const score = (t: string) => {
       let s =
         (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
-        (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0);
+        (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0) +
+        (normArtist && norm(t).includes(normArtist.split(" ")[0]) ? 1 : 0);
       // Deprioritize candidates whose title is much longer than the search
       // title (e.g. "Мэри Поппинс, до свидания" for "До свидания").
       const candWordCount = norm(t).split(" ").length;
@@ -430,10 +431,12 @@ async function fetchWikipedia(
       const titles = await searchWiki(sub, query);
       console.log("[wiki] song search:", query, "->", titles);
       for (const t of titles) {
-        if (score(t) > 0 && !ranked.includes(t)) ranked.push(t);
+        if (!ranked.includes(t)) ranked.push(t);
       }
     }
+    // Sort by score descending, highest first
     ranked.sort((a, b) => score(b) - score(a));
+    console.log("[wiki] song ranked candidates:", ranked);
 
     songResult = await tryCandidates(
       [...direct, ...ranked],
