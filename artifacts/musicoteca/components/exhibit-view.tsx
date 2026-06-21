@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface ExhibitTheme {
   theme: string;
@@ -74,7 +75,7 @@ function ListenButton() {
 }
 
 const PANEL_BASE =
-  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 py-10 md:w-1/4 md:snap-align-none md:px-8";
+  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 py-10 md:w-auto md:snap-align-none md:px-8";
 
 function toParagraphs(text: string): string[] {
   return text
@@ -94,9 +95,16 @@ export function ExhibitView({
   youtubeThumbnail,
   innerWorld,
   theMoment,
+  language,
 }: ExhibitData) {
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translation, setTranslation] = useState("");
+  const [translating, setTranslating] = useState(false);
+  const [translationFetched, setTranslationFetched] = useState(false);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -107,16 +115,56 @@ export function ExhibitView({
   const cover = wikiImage ?? youtubeThumbnail ?? null;
   const innerParas = toParagraphs(innerWorld);
   const momentParas = toParagraphs(theMoment);
+  const lang = language.toLowerCase().slice(0, 2);
+  const canTranslate = lang !== "en" && lang !== "" && lyrics.trim().length > 0;
+
+  const handleTranslate = async () => {
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    setShowTranslation(true);
+    if (translationFetched || translating) return;
+    setTranslating(true);
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lyrics, artist, title }),
+      });
+      const data = (await res.json()) as { translation?: string };
+      setTranslation(data.translation ?? "");
+    } catch {
+      setTranslation("");
+    } finally {
+      setTranslating(false);
+      setTranslationFetched(true);
+    }
+  };
 
   return (
     <main className="relative h-screen overflow-hidden">
+      <button
+        type="button"
+        onClick={() => router.push("/search")}
+        aria-label="Search"
+        className="fixed left-4 top-4 z-50 text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+      >
+        <span className="text-lg md:hidden" aria-hidden="true">
+          ←
+        </span>
+        <span className="hidden text-xs uppercase tracking-[0.25em] md:inline">
+          ⌕ search
+        </span>
+      </button>
+
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex h-full snap-x snap-mandatory overflow-x-auto md:snap-none md:overflow-x-hidden"
+        className="flex h-full snap-x snap-mandatory overflow-x-auto md:w-full md:snap-none md:overflow-x-hidden"
       >
         {/* Panel 1 — SONG */}
-        <section className={PANEL_BASE}>
+        <section className={`${PANEL_BASE} md:flex-1`}>
           <div className="mx-auto flex h-full max-w-md flex-col">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -157,6 +205,33 @@ export function ExhibitView({
               {lyrics}
             </div>
 
+            {canTranslate && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  className="text-xs uppercase tracking-[0.25em] text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+                >
+                  {showTranslation ? "hide translation" : "show translation"}
+                </button>
+
+                {showTranslation && (
+                  <div className="mt-4">
+                    <hr className="mb-4 border-warm-line dark:border-cool-line" />
+                    {translating ? (
+                      <p className="text-xs uppercase tracking-[0.25em] text-warm-grey dark:text-cool-grey">
+                        Translating…
+                      </p>
+                    ) : (
+                      <div className="whitespace-pre-line text-sm leading-loose text-warm-grey dark:text-cool-grey">
+                        {translation || "Translation unavailable"}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <hr className="my-6 border-warm-line dark:border-cool-line" />
 
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
@@ -169,7 +244,7 @@ export function ExhibitView({
         </section>
 
         {/* Panel 2 — INNER WORLD */}
-        <section className={`${PANEL_BASE} md:w-1/2`}>
+        <section className={`${PANEL_BASE} md:flex-[2]`}>
           <div className="mx-auto flex h-full max-w-md flex-col">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               Inner World
@@ -192,7 +267,7 @@ export function ExhibitView({
         </section>
 
         {/* Panel 3 — THE MOMENT */}
-        <section className={PANEL_BASE}>
+        <section className={`${PANEL_BASE} md:flex-1`}>
           <div className="mx-auto flex h-full max-w-md flex-col">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               The Moment

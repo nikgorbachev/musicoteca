@@ -103,9 +103,32 @@ interface WikiSummaryResponse {
   thumbnail?: { source?: string };
 }
 
-function wikiSubdomain(language: string): string {
+function wikiSubdomain(language: string, title: string): string {
   const lang = (language || "").toLowerCase().slice(0, 2);
-  return lang || "en";
+  if (lang) return lang;
+  if (/[\u0400-\u04FF]/.test(title)) return "ru";
+  return "en";
+}
+
+const RU_TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh",
+  з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o",
+  п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts",
+  ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu",
+  я: "ya",
+};
+
+function transliterateRu(text: string): string {
+  return text
+    .split("")
+    .map((ch) => {
+      const lower = ch.toLowerCase();
+      const mapped = RU_TRANSLIT[lower];
+      if (mapped === undefined) return ch;
+      if (ch === lower || mapped === "") return mapped;
+      return mapped.charAt(0).toUpperCase() + mapped.slice(1);
+    })
+    .join("");
 }
 
 async function searchWiki(sub: string, query: string): Promise<string[]> {
@@ -147,7 +170,14 @@ async function fetchWikipedia(
   album: string,
   artist: string,
 ): Promise<WikiResult> {
-  const sub = wikiSubdomain(language);
+  const sub = wikiSubdomain(language, title);
+  console.log(
+    "[wiki] language param:",
+    language || "(empty)",
+    "| subdomain:",
+    sub,
+  );
+
   const songWords = [
     "song",
     "single",
@@ -160,39 +190,82 @@ async function fetchWikipedia(
   ];
   const albumWords = ["album", "альбом", "álbum"];
 
+  // C1 — song (try Cyrillic original and a transliterated query on ru)
   if (title) {
-    const titles = await searchWiki(sub, title);
-    const hit = titles.find((t) =>
-      songWords.some((w) => t.toLowerCase().includes(w)),
-    );
-    if (hit) {
-      const s = await wikiSummary(sub, hit);
-      if (s && s.extract) {
-        return { wikiExtract: s.extract, wikiImage: s.image, wikiSource: "song" };
+    const queries = [title];
+    if (sub === "ru") {
+      const tr = transliterateRu(title);
+      if (tr && tr !== title) queries.push(tr);
+    }
+    for (const query of queries) {
+      const titles = await searchWiki(sub, query);
+      console.log("[wiki] song search:", query, "->", titles);
+      const hit = titles.find((t) =>
+        songWords.some((w) => t.toLowerCase().includes(w)),
+      );
+      if (hit) {
+        const s = await wikiSummary(sub, hit);
+        if (s && s.extract) {
+          console.log("[wiki] matched song page:", hit);
+          return {
+            wikiExtract: s.extract,
+            wikiImage: s.image,
+            wikiSource: "song",
+          };
+        }
       }
     }
   }
 
+  // C2 — album
   if (album) {
     const titles = await searchWiki(sub, album);
+    console.log("[wiki] album search:", album, "->", titles);
     const hit = titles.find((t) =>
       albumWords.some((w) => t.toLowerCase().includes(w)),
     );
     if (hit) {
       const s = await wikiSummary(sub, hit);
       if (s && s.extract) {
-        return { wikiExtract: s.extract, wikiImage: s.image, wikiSource: "album" };
+        console.log("[wiki] matched album page:", hit);
+        return {
+          wikiExtract: s.extract,
+          wikiImage: s.image,
+          wikiSource: "album",
+        };
       }
     }
   }
 
+  // C3 — artist (use a less-generic query on ru, e.g. "Кино группа")
   if (artist) {
-    const s = await wikiSummary(sub, artist);
-    if (s && s.extract) {
-      return { wikiExtract: s.extract, wikiImage: s.image, wikiSource: "artist" };
+    const artistQuery = sub === "ru" ? `${artist} группа` : artist;
+    const titles = await searchWiki(sub, artistQuery);
+    console.log("[wiki] artist search:", artistQuery, "->", titles);
+    const hit = titles[0];
+    if (hit) {
+      const s = await wikiSummary(sub, hit);
+      if (s && s.extract) {
+        console.log("[wiki] matched artist page:", hit);
+        return {
+          wikiExtract: s.extract,
+          wikiImage: s.image,
+          wikiSource: "artist",
+        };
+      }
+    }
+    const direct = await wikiSummary(sub, artist);
+    if (direct && direct.extract) {
+      console.log("[wiki] matched artist page (direct):", artist);
+      return {
+        wikiExtract: direct.extract,
+        wikiImage: direct.image,
+        wikiSource: "artist",
+      };
     }
   }
 
+  console.log("[wiki] no match found");
   return { wikiExtract: "", wikiImage: null, wikiSource: "none" };
 }
 
@@ -241,6 +314,8 @@ export async function GET(
   const title = searchParams.get("title") ?? "";
   const album = searchParams.get("album") ?? "";
   const language = searchParams.get("language") ?? "";
+
+  console.log("exhibit params:", { trackId, artist, title, album, language });
 
   const apiKey = process.env.MUSIXMATCH_API_KEY;
   const ytKey = process.env.YOUTUBE_API_KEY;

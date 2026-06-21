@@ -1,0 +1,73 @@
+Fix these issues in artifacts/musicoteca/. Do NOT change design or styling.
+
+--- FIX 1: Russian Wikipedia not loading ---
+
+In app/api/exhibit/[trackId]/route.ts, the language param may arrive 
+empty because Musixmatch track.search doesn't always return track_language.
+
+Fix the fetchWikipedia function:
+- If language param is empty or missing, try to detect it from the 
+  track title: if title contains Cyrillic characters → use "ru"
+  Simple check: /[\u0400-\u04FF]/.test(title)
+- Also: when searching Russian Wikipedia, try BOTH the original 
+  Cyrillic title AND a transliterated search
+- For the artist fallback on ru.wikipedia.org, search for "Кино 
+  группа" not just "Кино" (too generic)
+- Add console.log of: language param received, subdomain chosen, 
+  wiki search queries attempted, results found
+
+--- FIX 2: Add search button to exhibit page ---
+
+In components/exhibit-view.tsx:
+- Add a fixed top-left button (position: fixed, z-50, top-4 left-4)
+- Shows ← on mobile, "⌕ search" on desktop (text-xs spaced caps)
+- onClick navigates to /search using Next.js router
+- Same color as existing warm-grey/cool-grey text elements
+- No new dependencies
+
+--- FIX 3: Per-line translation toggle ---
+
+In app/api/translate/route.ts (create new file):
+POST endpoint, body: { lyrics: string, artist: string, title: string }
+Call Groq with:
+  model: "llama-3.3-70b-versatile"
+  max_tokens: 1500
+  response_format: { type: "json_object" }
+  prompt: "Translate these lyrics to English, line by line. 
+  Preserve the line breaks exactly. Return JSON with one key: 
+  'translation' containing the full translated lyrics with same 
+  line structure as original."
+Return { translation: string }
+On error return { translation: "" }
+
+In components/exhibit-view.tsx, in Panel 1 below the original lyrics:
+- Add a "show translation" button (same style as ListenButton)
+- On click: POST to /api/translate, show loading state, 
+  then render translation below a thin divider
+- Translation renders in same style as lyrics but in 
+  text-warm-grey/cool-grey (slightly dimmed) to distinguish
+- Button toggles to "hide translation" when visible
+- Only show this button if language prop is not "en" and not ""
+
+--- FIX 4: Desktop layout proportions ---
+
+In components/exhibit-view.tsx:
+Change the desktop column layout so all three panels fill 
+the full viewport width with no gaps.
+
+Current: md:w-1/4 on side panels, md:w-1/2 on center
+Replace with: on the outer flex container add md:w-full
+Side panels: md:flex-1
+Center panel: md:flex-[2]
+This gives a 1:2:1 ratio filling 100% width.
+
+Remove any max-width constraints on the outer scroll container 
+for desktop only.
+
+--- FIX 5: Log language detection for debugging ---
+
+In app/api/exhibit/[trackId]/route.ts at the start of the GET handler:
+console.log("exhibit params:", { trackId, artist, title, album, 
+language })
+
+Do NOT change anything else.
