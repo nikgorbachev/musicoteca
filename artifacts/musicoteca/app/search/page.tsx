@@ -15,6 +15,7 @@ type SearchResult = {
   albumId: string;
   hasLyrics: boolean;
   language: string;
+  isrc: string;
 };
 
 function exhibitHref(result: SearchResult): string {
@@ -25,6 +26,7 @@ function exhibitHref(result: SearchResult): string {
     album: result.album,
     year: result.year,
     language: result.language,
+    isrc: result.isrc,
   });
   return `/exhibit/${result.trackId}?${params.toString()}`;
 }

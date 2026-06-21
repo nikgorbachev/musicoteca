@@ -13,6 +13,7 @@ interface MxTrack {
   album_id?: number;
   has_lyrics?: number;
   track_language?: string;
+  track_isrc?: string;
 }
 
 interface MxSearchResponse {
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
       albumId: String(t.album_id ?? ""),
       hasLyrics: t.has_lyrics === 1,
       language: t.track_language ?? "",
+      isrc: t.track_isrc ?? "",
     }));
 
     return NextResponse.json({ results });

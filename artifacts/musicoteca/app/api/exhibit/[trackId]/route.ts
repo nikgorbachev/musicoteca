@@ -59,6 +59,34 @@ function detectLanguage(raw: string): string {
   return bestScore < 2 ? "en" : best;
 }
 
+// ---- ISRC country → language ----
+// The first two characters of an ISRC are the registrant's country code, which
+// is a useful language proxy when track_language and lyrics are unavailable.
+// Only clearly monolingual markets are mapped; ambiguous ones (BE, CH, CA, IN)
+// are intentionally omitted so they fall through to the English default.
+
+const ISRC_COUNTRY_LANG: Record<string, string> = {
+  US: "en", GB: "en", UK: "en", AU: "en", NZ: "en", IE: "en", ZA: "en",
+  QM: "en", QZ: "en",
+  FR: "fr", MC: "fr",
+  IT: "it",
+  DE: "de", AT: "de",
+  ES: "es", MX: "es", AR: "es", CO: "es", CL: "es", PE: "es", VE: "es",
+  UY: "es", PR: "es",
+  BR: "pt", PT: "pt",
+  RU: "ru", BY: "ru",
+  JP: "ja",
+  CN: "zh", TW: "zh", HK: "zh",
+  KR: "ko",
+  NL: "nl", SE: "sv", NO: "no", DK: "da", FI: "fi", PL: "pl",
+  GR: "el", TR: "tr", SA: "ar", EG: "ar", AE: "ar", LB: "ar",
+};
+
+function isrcToLang(isrc: string): string {
+  const cc = isrc.trim().slice(0, 2).toUpperCase();
+  return ISRC_COUNTRY_LANG[cc] ?? "";
+}
+
 // ---- Musixmatch lyrics ----
 
 interface LyricsResponse {
@@ -417,8 +445,9 @@ export async function GET(
   const title = searchParams.get("title") ?? "";
   const album = searchParams.get("album") ?? "";
   const language = searchParams.get("language") ?? "";
+  const isrc = searchParams.get("isrc") ?? "";
 
-  console.log("exhibit params:", { trackId, artist, title, album, language });
+  console.log("exhibit params:", { trackId, artist, title, album, language, isrc });
 
   const apiKey = process.env.MUSIXMATCH_API_KEY;
   const ytKey = process.env.YOUTUBE_API_KEY;
@@ -441,13 +470,17 @@ export async function GET(
       ? ytR.value
       : { videoId: null, youtubeThumbnail: null };
 
-  // Determine the effective language (param → detected from lyrics → Cyrillic title)
+  // Determine the effective language. Priority: explicit track_language → detected
+  // from lyrics → ISRC country → Cyrillic title → English (instrumental/unknown).
   const detected = detectLanguage(lyrics);
+  const isrcLang = isrcToLang(isrc);
   const effLang =
     paramLang ||
     detected ||
-    (/[\u0400-\u04FF]/.test(title) ? "ru" : "");
-  console.log("language detect:", { paramLang, detected, effLang });
+    isrcLang ||
+    (/[\u0400-\u04FF]/.test(title) ? "ru" : "") ||
+    "en";
+  console.log("language detect:", { paramLang, detected, isrcLang, effLang });
 
   // Stage 2 — Wikipedia with the resolved language
   let wiki: WikiResult = {

@@ -55,6 +55,7 @@ export default async function ExhibitPage({
   const album = first(searchParams.album);
   const year = first(searchParams.year);
   const language = first(searchParams.language);
+  const isrc = first(searchParams.isrc);
   const commontrackId = first(searchParams.commontrackId);
 
   const base = getBaseUrl();
@@ -67,6 +68,7 @@ export default async function ExhibitPage({
     exhibitUrl.searchParams.set("album", album);
     exhibitUrl.searchParams.set("year", year);
     exhibitUrl.searchParams.set("language", language);
+    exhibitUrl.searchParams.set("isrc", isrc);
 
     const exRes = await fetch(exhibitUrl.toString(), { cache: "no-store" });
     if (!exRes.ok) throw new Error("exhibit fetch failed");

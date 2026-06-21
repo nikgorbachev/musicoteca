@@ -16,6 +16,19 @@ languages) deliberately defaults to `"en"` to avoid cross-language false positiv
 ("que" is shared by es/fr/pt). Full song lyrics easily clear that bar, so real
 non-English songs still detect correctly. Don't lower the threshold to 1.
 
+# Language resolution priority (effLang chain)
+
+`paramLang (track_language) || detectedFromLyrics || isrcLang || cyrillic-title→ru || "en"`.
+
+**Why:** `track_language` is rarely populated by Musixmatch. Lyric-based detection is
+the most reliable signal when lyrics exist. The ISRC's first two chars are the
+registrant's *country* (not language) — a useful proxy only, so it sits BELOW lyric
+detection (e.g. "Volare" carries a GB ISRC despite Italian lyrics). Instrumental/
+unknown falls back to English to still pull English Wikipedia content.
+
+**How to apply:** ISRC→language map only covers clearly monolingual markets; ambiguous
+countries (BE, CH, CA, IN) are intentionally unmapped so they hit the English default.
+
 # Wikipedia matching MUST validate relevance, not just keyword-in-title
 
 Picking "first search result whose title contains a song/album word" returns wrong
