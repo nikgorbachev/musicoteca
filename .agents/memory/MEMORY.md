@@ -1,1 +1,2 @@
 - [Next.js in the monorepo](nextjs-in-monorepo.md) — convert a react-vite artifact into Next.js; free `/api` from api-server so route handlers are reachable.
+- [Musicoteca exhibit enrichment](musicoteca-exhibit-enrichment.md) — dependency-free lyric language detection (franc-min won't install); Wikipedia matches must validate artist+music relevance, not title keywords.

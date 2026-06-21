@@ -91,7 +91,7 @@ export default function SearchPage() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search a song, an artist, a memory"
+          placeholder="Name a song"
           aria-label="Search the archive"
           className="w-full bg-transparent font-serif text-lg tracking-wide text-ink placeholder:text-warm-grey/70 focus:outline-none dark:text-chalk dark:placeholder:text-cool-grey/70"
         />

@@ -15,7 +15,7 @@ export function SearchBar() {
           readOnly
           onFocus={goToSearch}
           onClick={goToSearch}
-          placeholder="Search a song, an artist, a memory"
+          placeholder="Name a song"
           aria-label="Search the archive"
           className="w-full cursor-pointer bg-transparent font-serif text-lg tracking-wide text-ink placeholder:text-warm-grey/70 focus:outline-none dark:text-chalk dark:placeholder:text-cool-grey/70"
         />

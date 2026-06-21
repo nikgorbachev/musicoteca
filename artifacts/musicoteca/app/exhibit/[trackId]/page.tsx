@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 type SearchParamsRecord = { [key: string]: string | string[] | undefined };
 
 interface ExhibitApiResponse {
+  language: string;
   lyrics: string;
   lensExplanation: string;
   moods: string[];
@@ -71,6 +72,8 @@ export default async function ExhibitPage({
     if (!exRes.ok) throw new Error("exhibit fetch failed");
     const ex = (await exRes.json()) as ExhibitApiResponse;
 
+    const viewLang = ex.language || language;
+
     let innerWorld = "";
     let theMoment = "";
     const ctxRes = await fetch(`${base}/api/context`, {
@@ -81,7 +84,7 @@ export default async function ExhibitPage({
         title,
         artist,
         year,
-        language,
+        language: viewLang,
         wikiExtract: ex.wikiExtract,
         wikiSource: ex.wikiSource,
         lensExplanation: ex.lensExplanation,
@@ -113,7 +116,7 @@ export default async function ExhibitPage({
         videoId={ex.videoId ?? null}
         innerWorld={innerWorld}
         theMoment={theMoment}
-        language={language}
+        language={viewLang}
       />
     );
   } catch {
