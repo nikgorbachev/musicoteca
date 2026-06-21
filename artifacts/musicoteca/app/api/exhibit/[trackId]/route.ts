@@ -238,16 +238,18 @@ interface WikiExtractResponse {
   query?: { pages?: Record<string, { extract?: string }> };
 }
 
-// The REST summary endpoint often returns a single truncated sentence. The
-// action=query extracts endpoint returns the full lead section, which is much
-// richer for the audioguide narrator.
-async function fetchFullIntro(sub: string, title: string): Promise<string> {
+const WIKI_EXTRACT_LIMIT = 4000;
+
+// The REST summary endpoint returns only a short lead sentence. The
+// action=query extracts endpoint (no exintro) returns the full plain-text
+// article body — backstory, biographical detail, reception — which makes for a
+// far richer audioguide. Truncate to keep the Groq prompt within token budget.
+async function fetchFullExtract(sub: string, title: string): Promise<string> {
   const url = new URL(`https://${sub}.wikipedia.org/w/api.php`);
   url.searchParams.set("action", "query");
   url.searchParams.set("titles", title);
   url.searchParams.set("redirects", "1");
   url.searchParams.set("prop", "extracts");
-  url.searchParams.set("exintro", "true");
   url.searchParams.set("explaintext", "true");
   url.searchParams.set("exsectionformat", "plain");
   url.searchParams.set("format", "json");
@@ -259,7 +261,7 @@ async function fetchFullIntro(sub: string, title: string): Promise<string> {
   const data = (await res.json()) as WikiExtractResponse;
   const pages = data.query?.pages ?? {};
   const page = Object.values(pages)[0] as { extract?: string } | undefined;
-  return page?.extract ?? "";
+  return (page?.extract ?? "").slice(0, WIKI_EXTRACT_LIMIT);
 }
 
 async function wikiSummary(
@@ -280,20 +282,10 @@ async function wikiSummary(
   });
   if (!res.ok) return null;
   const data = (await res.json()) as WikiSummaryResponse;
-  const type = data.type ?? "standard";
-
-  let extract = data.extract ?? "";
-  // For short summaries on real (non-disambiguation) pages, pull the fuller
-  // lead section and keep whichever extract is longer.
-  if (type !== "disambiguation" && extract.length < 300) {
-    const full = await fetchFullIntro(sub, title);
-    if (full.length > extract.length) extract = full;
-  }
-
   return {
-    extract,
+    extract: data.extract ?? "",
     image: data.thumbnail?.source ?? null,
-    type,
+    type: data.type ?? "standard",
     url: data.content_urls?.desktop?.page ?? null,
   };
 }
@@ -383,8 +375,11 @@ async function fetchWikipedia(
       if (s.type === "disambiguation" || isDisambig(s.extract)) continue;
       if (!validate(s.extract, cand)) continue;
       console.log(`[wiki] matched ${source} page:`, cand);
+      // Only now that we have a confirmed page do we pull the full article
+      // body (truncated). Fall back to the summary if the fuller fetch fails.
+      const full = await fetchFullExtract(sub, cand);
       return {
-        wikiExtract: s.extract,
+        wikiExtract: full.length > s.extract.length ? full : s.extract,
         wikiImage: s.image,
         wikiSource: source,
         wikiUrl: s.url,
