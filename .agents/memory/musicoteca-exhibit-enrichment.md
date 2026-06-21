@@ -59,6 +59,30 @@ AND a music word — `nameMatch && hasMusicWord`. Always drop disambiguation pag
 the summary API's `type === "disambiguation"` field (more robust than phrase matching).
 Returning no wiki ("none") is better than returning a confidently-wrong page.
 
+# Groq rate limits are per-model — fall back to a second model, not a second account
+
+Groq's free-tier token-per-day caps are enforced **per model**, so a 429 on
+`llama-3.3-70b-versatile` does NOT touch `llama-3.1-8b-instant`'s separate (larger)
+bucket. `lib/groq.ts` exploits this: each route tries a primary model, then retries the
+*other* model on failure. Context defaults to 8b (huge quota, fires every page view),
+translate defaults to 70b (better quality, on-demand).
+
+**Why:** spinning up a new Groq account to dodge the cap violates ToS and is fragile;
+a second model is a free, legitimate independent quota pool.
+
+**How to apply:** when one model is capped, the swap unlocks testing immediately — no
+account juggling, no waiting for the ~24h reset.
+
+# The 8b model returns fragmented/array JSON — normalize to a string
+
+`llama-3.1-8b-instant` under `response_format: json_object` often returns string fields
+(innerWorld/theMoment/translation) as **arrays of paragraphs — sometimes split
+mid-sentence at commas**, where 70b returns a clean string. Two defenses are needed
+together: (1) the prompt must explicitly demand a single string with `\n\n` between
+paragraphs, never an array; (2) the route must still coerce array→string as a safety net
+(join paragraphs with `\n\n`). Without the prompt rule, the coercion alone yields broken
+prose with newlines mid-sentence.
+
 # The context API (Groq) degrades silently to empty panels on rate limit
 
 `app/api/context/route.ts` returns `{innerWorld:"", theMoment:""}` on ANY failure
