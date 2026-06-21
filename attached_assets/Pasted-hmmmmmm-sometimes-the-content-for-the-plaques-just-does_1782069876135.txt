@@ -1,0 +1,50 @@
+hmmmmmm
+sometimes the content for the plaques just doesn't load
+
+
+then i reload the page and it works well
+
+
+
+the problem is it's almost 50/50 , like it barely stands a basic demo test for the hackathon 
+
+ABSOLUTELY TO BE FIXED
+i need it to be just bulletproof -- why can it fail to load like half of the times?
+
+
+
+
+1) first try -- nothing 
+⌕ search
+Каждый раз
+Монеточка
+loveheartbreakreflectionsolitudeangst
+show translation
+Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей  Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей  Где ты, когда ты не онлайн, когда я жду тебя в сети? В какие ссылки перейти, чтоб просто оказаться там? О чём ты думаешь сейчас? Давай среди берёз густых Читать любимый твой рассказ — страничку я, страничку ты  Или в гости и просто чаю, и сердцами WhatsApp закидан Но я снова не отвечаю, я инкогнито, инко-гнида Но если б мне платили, милый, каждый раз, когда взгляд твой дымный Мне мерещится где-то мимо, каждый раз, когда снишься ты мне  Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей  Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей  Старая конфорка плещет нам, на двоих одна заварка За окном темно, в окне трещина, лампочка-луна над парком Я опять кручу на пальце прядь, пахну, как мамины духи Ты хочешь меня (снять) снять-снять, а я хочу писать стихи-стихи  Уезжай, чай не допивай, снег или дождь там — уходи Пусть хоть всего переморосит, пусть хоть торнадо унесёт вдаль Может, есть ещё твой трамвай? Может, нет? Всё равно иди Там промозглый седой февраль — он теперь, как и ты, один  И тебя не жаль, не жаль, не жаль, хоть в слоу-мо в дыме сигарет Даже в миноре и под рояль, даже под грустную скрипку — нет Если б ты не любил стихи, превратилась бы в звонкий ямб Если б был-, фитоняшкой бы стала я  Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей  Если б мне платили каждый раз Каждый раз, когда я думаю о тебе Я бы бомжевала возле трасс Я бы стала самой бедной из людей
+Lens
+The song 'Every Time' by Monetochka portrays a sense of longing and unrequited love, where the singer imagines scenarios of being financially supported by the person they desire. The lyrics depict a yearning for attention and affection, symbolized by the desire for payment, while also hinting at feelings of inadequacy and self-doubt if this support is not received.
+Inner World
+Монеточка
+▶ Listen
+[source: wikipedia ↗](https://ru.wikipedia.org/wiki/%D0%9C%D0%BE%D0%BD%D0%B5%D1%82%D0%BE%D1%87%D0%BA%D0%B0)
+The Moment
+
+▶ Listen
+[source: wikipedia ↗](https://ru.wikipedia.org/wiki/%D0%9C%D0%BE%D0%BD%D0%B5%D1%82%D0%BE%D1%87%D0%BA%D0%B0)
+
+
+
+
+then second try -- better but a lot of fn object objects.....
+
+and the image is stupid -- no way is it taken from wikipedia 
+
+there's no song каждый раз but there is a page for раскраски для взрослых with the cover image ...
+
+ABSOLUTELY TO FIX
+
+
+we MUST make replit make musicoteca song page image such that
+1) first we try with wikipedia page of the song
+2) wikipedia page of the song's album
+3) youtube thumbnail
