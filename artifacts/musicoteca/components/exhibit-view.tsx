@@ -259,7 +259,7 @@ export function ExhibitView({
           style={panel1Style}
           className={`${PANEL_BASE} ${panel1Flex}`}
         >
-          <div className="flex h-full w-full flex-col">
+          <div className="flex h-full w-full flex-col pb-8">
             {coverSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -380,7 +380,7 @@ export function ExhibitView({
 
         {/* Panel 2 — INNER WORLD */}
         <section onScroll={handlePanelScroll} className={`${PANEL_BASE} md:flex-1`}>
-          <div className="mx-auto flex h-full max-w-md flex-col">
+          <div className="mx-auto flex h-full max-w-md flex-col pb-8">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               Inner World
             </p>
@@ -414,7 +414,7 @@ export function ExhibitView({
 
         {/* Panel 3 — THE MOMENT */}
         <section onScroll={handlePanelScroll} className={`${PANEL_BASE} md:flex-1`}>
-          <div className="mx-auto flex h-full max-w-md flex-col">
+          <div className="mx-auto flex h-full max-w-md flex-col pb-8">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               The Moment
             </p>

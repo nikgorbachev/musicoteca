@@ -59,6 +59,27 @@ AND a music word — `nameMatch && hasMusicWord`. Always drop disambiguation pag
 the summary API's `type === "disambiguation"` field (more robust than phrase matching).
 Returning no wiki ("none") is better than returning a confidently-wrong page.
 
+# LLM provider: now Mistral (mistral-small-2503), not Groq
+
+The exhibit placards (`/api/context`) and lyric translation (`/api/translate`) call
+**Mistral** via `lib/mistral.ts` (`mistral-small-2503`, JSON mode). Groq was dropped —
+its `llama-3.1-8b-instant` output quality (fragmented, lower-fidelity prose) was too low
+for the museum-placard tone, and the per-model fallback dance wasn't worth it.
+
+**Why:** quality > token-cap cleverness for this product. The Groq notes below are kept
+as general reference only; they no longer describe the live code path.
+
+# Newly added secrets need a workflow restart to reach the running process
+
+Adding a secret (e.g. `MISTRAL_API_KEY`) via the secrets tooling does NOT inject it into
+an already-running dev-server/workflow process — the route kept logging "no
+MISTRAL_API_KEY" until the `artifacts/<slug>: web` workflow was restarted.
+
+**Why:** env vars are read from the process environment at spawn time.
+
+**How to apply:** after adding/changing any secret an app reads, restart that app's
+workflow before testing, or you'll chase phantom "missing key" failures.
+
 # Groq rate limits are per-model — fall back to a second model, not a second account
 
 Groq's free-tier token-per-day caps are enforced **per model**, so a 429 on

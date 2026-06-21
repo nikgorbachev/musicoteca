@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { groqChat } from "@/lib/groq";
+import { mistralChat } from "@/lib/mistral";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,14 @@ function toText(value: unknown): string {
     return value.filter((v) => typeof v === "string").join("\n\n");
   }
   return "";
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\(\s*\)/g, "")
+    .trim();
 }
 
 export async function POST(request: Request) {
@@ -69,9 +77,7 @@ period and place confidently. Write as if narrating a documentary.
 
 Write in English. Museum wall plaque tone — precise, warm, never academic.`;
 
-    const content = await groqChat({
-      model: "llama-3.1-8b-instant",
-      fallbackModel: "llama-3.3-70b-versatile",
+    const content = await mistralChat({
       maxTokens: 1000,
       jsonResponse: true,
       messages: [
@@ -83,8 +89,8 @@ Write in English. Museum wall plaque tone — precise, warm, never academic.`;
 
     const parsed = JSON.parse(content) as Record<string, unknown>;
     return NextResponse.json({
-      innerWorld: toText(parsed.innerWorld),
-      theMoment: toText(parsed.theMoment ?? parsed["theМoment"]),
+      innerWorld: stripMarkdown(toText(parsed.innerWorld)),
+      theMoment: stripMarkdown(toText(parsed.theMoment ?? parsed["theМoment"])),
     });
   } catch {
     return NextResponse.json(empty);

@@ -1,8 +1,7 @@
 {
-  "/page": "app/page.js",
-  "/exhibit/[trackId]/page": "app/exhibit/[trackId]/page.js",
-  "/search/page": "app/search/page.js",
   "/api/exhibit/[trackId]/route": "app/api/exhibit/[trackId]/route.js",
-  "/api/search/route": "app/api/search/route.js",
-  "/api/context/route": "app/api/context/route.js"
+  "/exhibit/[trackId]/page": "app/exhibit/[trackId]/page.js",
+  "/page": "app/page.js",
+  "/api/context/route": "app/api/context/route.js",
+  "/api/translate/route": "app/api/translate/route.js"
 }

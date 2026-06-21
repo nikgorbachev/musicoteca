@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { groqChat } from "@/lib/groq";
+import { mistralChat } from "@/lib/mistral";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,7 @@ Song: "${title}" by ${artist}
 Lyrics:
 ${lyrics}`;
 
-    const content = await groqChat({
-      model: "llama-3.3-70b-versatile",
-      fallbackModel: "llama-3.1-8b-instant",
+    const content = await mistralChat({
       maxTokens: 1500,
       jsonResponse: true,
       messages: [

@@ -1,0 +1,106 @@
+Fix these issues in artifacts/musicoteca/. No design changes except where specified.
+
+--- FIX 1: Switch LLM to Mistral API ---
+
+In lib/groq.ts (or wherever groqChat is defined), add a parallel 
+mistralChat function, OR just replace the LLM calls directly.
+
+In app/api/context/route.ts:
+Replace the Groq fetch call with Mistral API:
+
+POST https://api.mistral.ai/v1/chat/completions
+Headers:
+  Authorization: Bearer {process.env.MISTRAL_API_KEY}
+  Content-Type: application/json
+Body:
+{
+  model: "mistral-small-2503",
+  max_tokens: 1000,
+  response_format: { type: "json_object" },
+  messages: [system, user]
+}
+
+Same system prompt and user prompt, same JSON parsing logic.
+Same empty fallback on error.
+
+In app/api/translate/route.ts:
+Same switch — replace Groq call with Mistral API call.
+model: "mistral-small-2503"
+max_tokens: 1500
+
+Remove any import or usage of groqChat if it's now unused.
+
+--- FIX 2: Strip markdown links from Groq/LLM output ---
+
+The 8b model was outputting markdown links like [text](url) in the 
+generated text. Even though we're switching to Mistral, add a 
+sanitization step to be safe.
+
+In app/api/context/route.ts, after parsing the JSON response,
+before returning, sanitize both strings:
+
+function stripMarkdown(text: string): string {
+  // Remove markdown links: [text](url) → text
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove bare URLs
+    .replace(/https?:\/\/\S+/g, '')
+    // Remove leftover parentheses from URL removal
+    .replace(/\(\s*\)/g, '')
+    .trim();
+}
+
+Apply to both innerWorld and theMoment before returning.
+
+--- FIX 3: Fix image priority — wiki song → wiki album → youtube ---
+
+Currently wikiImage comes from whatever Wikipedia page matched first.
+The issue is we need to track images from each fallback level separately.
+
+In app/api/exhibit/[trackId]/route.ts, the fetchWikipedia function 
+already returns wikiImage from whichever page matched.
+This is correct — no change needed there.
+
+The real fix is in the exhibit response: pass back both wikiImage 
+AND youtubeThumbnail, and let the frontend pick correctly.
+
+In components/exhibit-view.tsx, change cover image logic to:
+const coverSrc = wikiImage ?? youtubeThumbnail ?? null;
+const isWikiSquare = !!wikiImage; // wiki photos are usually portrait/square
+const isYouTube = !wikiImage && !!youtubeThumbnail;
+
+Render:
+{coverSrc ? (
+  <img
+    src={coverSrc}
+    alt={`${title} cover`}
+    className={isYouTube
+      ? "w-full object-contain"           // 16:9, don't crop
+      : "aspect-square w-full object-cover"} // square wiki photo
+  />
+) : (
+  <div className="aspect-square w-full bg-ink/10 dark:bg-chalk/10" />
+)}
+
+Also: in app/api/exhibit/[trackId]/route.ts, only include wikiUrl 
+in response if wikiExtract is non-empty:
+wikiUrl: wiki.wikiExtract.length > 0 ? wiki.wikiUrl : null,
+
+--- FIX 4: Bottom padding on exhibit panels ---
+
+In components/exhibit-view.tsx, find the PANEL_BASE constant:
+const PANEL_BASE = "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 py-10 ..."
+
+Change py-10 to py-10 pb-8 — actually just ensure there's 
+padding-bottom of at least 2rem on each panel's inner div.
+
+Find the inner div inside each panel section:
+<div className="mx-auto flex h-full max-w-md flex-col">
+
+Change to:
+<div className="mx-auto flex h-full max-w-md flex-col pb-8">
+
+Apply to all three panels.
+
+--- DO NOT change anything else ---
+No layout changes, no new dependencies, no theme changes.

@@ -579,7 +579,7 @@ export async function GET(
     wikiExtract: wiki.wikiExtract,
     wikiImage: wiki.wikiImage,
     wikiSource: wiki.wikiSource,
-    wikiUrl: wiki.wikiUrl,
+    wikiUrl: wiki.wikiExtract.length > 0 ? wiki.wikiUrl : null,
     videoId: yt.videoId,
     youtubeThumbnail: yt.youtubeThumbnail,
   });
