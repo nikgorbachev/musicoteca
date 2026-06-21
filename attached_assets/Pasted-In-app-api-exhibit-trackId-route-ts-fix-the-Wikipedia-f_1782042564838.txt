@@ -1,0 +1,64 @@
+In app/api/exhibit/[trackId]/route.ts, fix the Wikipedia fetching.
+
+TWO changes:
+
+CHANGE 1: After searchWiki returns candidates, also always attempt 
+a direct title fetch as a candidate. Wikipedia redirects work on 
+direct fetch even when search misses due to alternate titles.
+
+In the tryCandidates helper, before iterating search results,
+prepend the raw query itself as the first candidate to try directly.
+
+So in the song search section (C1), the candidates array should be:
+[title, artist+" "+title, ...searchResults]
+not just searchResults.
+
+For Russian titles specifically, also try the title without 
+common adjective prefixes — e.g. strip the first word if 
+the title is 3+ words. This catches cases like 
+"Миллион алых роз" → try "алых роз" and "роз" — 
+actually simpler: just try the last 1-2 words of the title too.
+
+Add these candidates for any language:
+const titleWords = title.split(" ");
+if (titleWords.length >= 3) {
+  candidates.push(titleWords.slice(1).join(" ")); // drop first word
+  candidates.push(titleWords.slice(-2).join(" ")); // last two words  
+}
+
+CHANGE 2: When wikiSummary returns an extract that is shorter 
+than 300 characters, also fetch the full page intro via:
+GET https://{sub}.wikipedia.org/w/api.php
+  ?action=query
+  &titles={encodedTitle}
+  &prop=extracts
+  &exintro=true
+  &explaintext=true
+  &exsectionformat=plain
+  &format=json
+
+This returns much richer intro text than the REST summary endpoint.
+Use this longer extract as wikiExtract instead of the short summary.
+
+Update wikiSummary function to:
+1. First fetch REST summary (for image + url + quick check)
+2. If extract < 300 chars or after any successful match,
+   fetch the full intro via the action=query endpoint above
+3. Return the longer of the two extracts
+
+The action=query response shape:
+{
+  query: {
+    pages: {
+      [pageId]: {
+        extract: string  ← this is what you want
+      }
+    }
+  }
+}
+Extract it with:
+const pages = data.query?.pages ?? {};
+const page = Object.values(pages)[0] as { extract?: string };
+const fullExtract = page?.extract ?? "";
+
+Use fullExtract if it's longer than the summary extract.

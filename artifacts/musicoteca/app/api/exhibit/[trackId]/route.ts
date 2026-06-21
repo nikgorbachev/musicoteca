@@ -234,6 +234,34 @@ async function searchWiki(sub: string, query: string): Promise<string[]> {
   return (data.query?.search ?? []).map((s) => s.title);
 }
 
+interface WikiExtractResponse {
+  query?: { pages?: Record<string, { extract?: string }> };
+}
+
+// The REST summary endpoint often returns a single truncated sentence. The
+// action=query extracts endpoint returns the full lead section, which is much
+// richer for the audioguide narrator.
+async function fetchFullIntro(sub: string, title: string): Promise<string> {
+  const url = new URL(`https://${sub}.wikipedia.org/w/api.php`);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("titles", title);
+  url.searchParams.set("redirects", "1");
+  url.searchParams.set("prop", "extracts");
+  url.searchParams.set("exintro", "true");
+  url.searchParams.set("explaintext", "true");
+  url.searchParams.set("exsectionformat", "plain");
+  url.searchParams.set("format", "json");
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { "User-Agent": WIKI_UA },
+  });
+  if (!res.ok) return "";
+  const data = (await res.json()) as WikiExtractResponse;
+  const pages = data.query?.pages ?? {};
+  const page = Object.values(pages)[0] as { extract?: string } | undefined;
+  return page?.extract ?? "";
+}
+
 async function wikiSummary(
   sub: string,
   title: string,
@@ -252,10 +280,20 @@ async function wikiSummary(
   });
   if (!res.ok) return null;
   const data = (await res.json()) as WikiSummaryResponse;
+  const type = data.type ?? "standard";
+
+  let extract = data.extract ?? "";
+  // For short summaries on real (non-disambiguation) pages, pull the fuller
+  // lead section and keep whichever extract is longer.
+  if (type !== "disambiguation" && extract.length < 300) {
+    const full = await fetchFullIntro(sub, title);
+    if (full.length > extract.length) extract = full;
+  }
+
   return {
-    extract: data.extract ?? "",
+    extract,
     image: data.thumbnail?.source ?? null,
-    type: data.type ?? "standard",
+    type,
     url: data.content_urls?.desktop?.page ?? null,
   };
 }
@@ -339,7 +377,7 @@ async function fetchWikipedia(
     for (const cand of candidates) {
       if (!cand || seen.has(cand)) continue;
       seen.add(cand);
-      if (seen.size > 4) break;
+      if (seen.size > 8) break;
       const s = await wikiSummary(sub, cand);
       if (!s || !s.extract) continue;
       if (s.type === "disambiguation" || isDisambig(s.extract)) continue;
@@ -362,21 +400,39 @@ async function fetchWikipedia(
       const tr = transliterateRu(title);
       if (tr && tr !== title) queries.push(tr);
     }
+
+    // Direct-fetch candidates first: Wikipedia redirects resolve on a direct
+    // title fetch even when search misses due to alternate/native titles.
+    const direct: string[] = [title, `${artist} ${title}`.trim()];
+    const titleWords = title.split(" ");
+    if (titleWords.length >= 3) {
+      direct.push(titleWords.slice(1).join(" ")); // drop leading adjective(s)
+      direct.push(titleWords.slice(-2).join(" ")); // last two words
+    }
+
+    const score = (t: string) =>
+      (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
+      (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0);
+
+    const ranked: string[] = [];
     for (const query of queries) {
       const titles = await searchWiki(sub, query);
       console.log("[wiki] song search:", query, "->", titles);
-      const score = (t: string) =>
-        (normTitle && norm(t).includes(normTitle) ? 2 : 0) +
-        (songWords.some((w) => t.toLowerCase().includes(w)) ? 1 : 0);
-      const ranked = [...titles]
-        .filter((t) => score(t) > 0)
-        .sort((a, b) => score(b) - score(a));
-      const result = await tryCandidates(ranked, "song", (extract, cand) => {
+      for (const t of titles) {
+        if (score(t) > 0 && !ranked.includes(t)) ranked.push(t);
+      }
+    }
+    ranked.sort((a, b) => score(b) - score(a));
+
+    const result = await tryCandidates(
+      [...direct, ...ranked],
+      "song",
+      (extract, cand) => {
         const titleMatch = !!normTitle && norm(cand).includes(normTitle);
         return mentionsArtist(extract) || (titleMatch && hasMusicWord(extract));
-      });
-      if (result) return result;
-    }
+      },
+    );
+    if (result) return result;
   }
 
   // C2 — album
