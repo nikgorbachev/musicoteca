@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -585,9 +586,9 @@ export function ExhibitView({
           ⌕ search
         </button>
 
-        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-serif text-xs tracking-[0.2em] text-ink/50 dark:text-chalk/50 block">
+        <Link href="/" className="absolute left-1/2 -translate-x-1/2 font-serif text-xs tracking-[0.2em] text-ink/50 dark:text-chalk/50 hover:text-ink dark:hover:text-chalk transition-colors">
           M U S I C O T E C A
-        </span>
+        </Link>
 
         <ThemeToggle />
       </header>
