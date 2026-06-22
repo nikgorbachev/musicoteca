@@ -1,0 +1,420 @@
+Major upgrade to audio playback in artifacts/musicoteca/.
+Work only in these files:
+
+- components/exhibit-view.tsx
+- app/api/narrate/route.ts (create new)
+  Do NOT change any other files.
+
+--- STEP 1: Create app/api/narrate/route.ts ---
+
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+const VOICE_MAP: Record<string, string> = {
+"1950s": "EfjZO8iTlwA2wRGzKGMj",
+"1960s": "i5l9LLTfCYKQzNK6qwQV",
+"1970s": "aLg5bXPwIfBuljLTf1d6",
+"1980s": "z8Z7TbjIBaor7fzwiadh",
+"1990s": "o98AvbWqdipnEF1z8h4p",
+"2000s": "bRDyApmqjRqHeDaynDN0",
+"default": "Atn2QJg3TnFV3zBkm0i0",
+};
+
+function getVoiceId(era: string): string {
+return VOICE_MAP[era] ?? VOICE_MAP["default"];
+}
+
+function yearToEra(year: string): string {
+const y = parseInt(year);
+if (y < 1960) return "1950s";
+if (y < 1970) return "1960s";
+if (y < 1980) return "1970s";
+if (y < 1990) return "1980s";
+if (y < 2000) return "1990s";
+if (y < 2010) return "2000s";
+return "default";
+}
+
+export { yearToEra };
+
+export async function POST(request: Request) {
+try {
+const body = await request.json() as {
+text?: string; language?: string; era?: string
+};
+const text = (body.text ?? "").replace(/\*\*([^*]+)\*\*/g, "$1").trim();
+const language = body.language ?? "en";
+const era = body.era ?? "default";
+
+    if (!text) return new Response("No text", { status: 400 });
+
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) return new Response("No API key", { status: 500 });
+
+    const voiceId = getVoiceId(era, language);
+
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("ElevenLabs error:", err);
+      return new Response("ElevenLabs error", { status: 502 });
+    }
+
+    return new Response(res.body, {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
+      },
+    });
+
+} catch (e) {
+console.error("narrate error:", e);
+return new Response("Server error", { status: 500 });
+}
+}
+
+--- STEP 2: Replace exhibit-view.tsx audio section ---
+
+Add these imports at the top:
+import { useCallback } from "react";
+
+Add yearToEra helper inside the component (copy from route or inline):
+function yearToEra(year: string): string {
+const y = parseInt(year);
+if (y < 1960) return "1950s";
+if (y < 1970) return "1960s";
+if (y < 1980) return "1970s";
+if (y < 1990) return "1980s";
+if (y < 2000) return "1990s";
+if (y < 2010) return "2000s";
+return "default";
+}
+
+Add these state variables inside ExhibitView:
+const [useEraVoice, setUseEraVoice] = useState(false);
+const audioRef = useRef<HTMLAudioElement | null>(null);
+const blobUrlRef = useRef<Record<string, string>>({});
+
+type AudioState = "idle" | "loading" | "playing" | "paused" | "error";
+const [audioStates, setAudioStates] = useState<Record<string, AudioState>>({});
+const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
+const [audioDuration, setAudioDuration] = useState<Record<string, number>>({});
+const [currentId, setCurrentId] = useState<string | null>(null);
+
+Compute era once:
+const songEra = yearToEra(year);
+const activeEra = useEraVoice ? songEra : "default";
+
+Add play/pause/seek logic:
+const playNarration = useCallback(async (id: string, text: string) => {
+// If same id is playing, pause it
+if (currentId === id && audioStates[id] === "playing") {
+audioRef.current?.pause();
+setAudioStates(s => ({ ...s, [id]: "paused" }));
+return;
+}
+// If same id is paused, resume
+if (currentId === id && audioStates[id] === "paused" && audioRef.current) {
+await audioRef.current.play();
+setAudioStates(s => ({ ...s, [id]: "playing" }));
+return;
+}
+// Stop current audio
+if (audioRef.current) {
+audioRef.current.pause();
+audioRef.current = null;
+}
+
+setCurrentId(id);
+setAudioStates(s => ({ ...s, [id]: "loading" }));
+setAudioProgress(s => ({ ...s, [id]: 0 }));
+
+try {
+const cleanText = text.replace(/\*\*([^*]+)\*\*/g, "$1");
+const res = await fetch("/api/narrate", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ text: cleanText, language, era: activeEra }),
+});
+if (!res.ok) throw new Error("narrate failed");
+
+    const blob = await res.blob();
+    // Revoke old blob URL for this id
+    if (blobUrlRef.current[id]) URL.revokeObjectURL(blobUrlRef.current[id]);
+    const url = URL.createObjectURL(blob);
+    blobUrlRef.current[id] = url;
+
+    const audio = new Audio(url);
+    audioRef.current = audio;
+
+    audio.ontimeupdate = () => {
+      setAudioProgress(s => ({ ...s, [id]: audio.currentTime }));
+    };
+    audio.onloadedmetadata = () => {
+      setAudioDuration(s => ({ ...s, [id]: audio.duration }));
+    };
+    audio.onended = () => {
+      setAudioStates(s => ({ ...s, [id]: "idle" }));
+      setAudioProgress(s => ({ ...s, [id]: 0 }));
+      setCurrentId(null);
+    };
+    audio.onerror = () => {
+      setAudioStates(s => ({ ...s, [id]: "error" }));
+      setCurrentId(null);
+    };
+
+    await audio.play();
+    setAudioStates(s => ({ ...s, [id]: "playing" }));
+
+} catch {
+setAudioStates(s => ({ ...s, [id]: "error" }));
+setCurrentId(null);
+}
+}, [language, activeEra, audioStates, currentId]);
+
+const seekTo = (id: string, time: number) => {
+if (currentId === id && audioRef.current) {
+audioRef.current.currentTime = time;
+setAudioProgress(s => ({ ...s, [id]: time }));
+}
+};
+
+const downloadAudio = (id: string, label: string) => {
+const url = blobUrlRef.current[id];
+if (!url) return;
+const a = document.createElement("a");
+a.href = url;
+a.download = `${title}-${label}.mp3`.replace(/\s+/g, "-");
+a.click();
+};
+
+const formatTime = (s: number) => {
+const m = Math.floor(s / 60);
+const sec = Math.floor(s % 60);
+return `${m}:${sec.toString().padStart(2, "0")}`;
+};
+
+--- STEP 3: Create AudioPlayer component inside exhibit-view.tsx ---
+
+Add this component function before ExhibitView:
+
+interface AudioPlayerProps {
+id: string;
+text: string;
+label: string;
+state: AudioState | undefined;
+progress: number;
+duration: number;
+onPlay: (id: string, text: string) => void;
+onSeek: (id: string, time: number) => void;
+onDownload: (id: string, label: string) => void;
+}
+
+function AudioPlayer({
+id, text, label, state = "idle", progress, duration,
+onPlay, onSeek, onDownload
+}: AudioPlayerProps) {
+const isActive = state === "playing" || state === "paused";
+const pct = duration > 0 ? (progress / duration) \* 100 : 0;
+
+return (
+
+<div className="flex flex-col gap-2">
+<div className="flex items-center gap-3">
+{/_ Play/pause button _/}
+<button
+type="button"
+onClick={() => onPlay(id, text)}
+disabled={!text || state === "error"}
+className="text-xs uppercase tracking-[0.25em] text-warm-grey
+transition-colors hover:text-ink dark:text-cool-grey
+dark:hover:text-chalk disabled:opacity-30 disabled:cursor-not-allowed" >
+{state === "loading" ? "…"
+: state === "playing" ? "◼ stop"
+: state === "paused" ? "▶ resume"
+: state === "error" ? "error"
+: "▶ listen"}
+</button>
+
+        {/* Time display when active */}
+        {isActive && duration > 0 && (
+          <span className="text-xs text-warm-grey/60 dark:text-cool-grey/60 tabular-nums">
+            {formatTime(progress)} / {formatTime(duration)}
+          </span>
+        )}
+
+        {/* Download button — only when blob exists */}
+        {isActive && (
+          <button
+            type="button"
+            onClick={() => onDownload(id, label)}
+            title="Download audio"
+            className="text-xs text-warm-grey/50 hover:text-warm-grey
+              dark:text-cool-grey/50 dark:hover:text-cool-grey transition-colors"
+          >
+            ↓
+          </button>
+        )}
+      </div>
+
+      {/* Progress bar — only when active */}
+      {isActive && (
+        <div
+          className="h-px w-full bg-warm-line dark:bg-cool-line cursor-pointer relative"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const frac = (e.clientX - rect.left) / rect.width;
+            onSeek(id, frac * duration);
+          }}
+        >
+          <div
+            className="h-full bg-ink dark:bg-chalk transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+
+);
+}
+
+--- STEP 4: Era voice toggle component ---
+
+Add before ExhibitView:
+
+function EraToggle({
+useEra, era, onToggle
+}: {
+useEra: boolean; era: string; onToggle: () => void
+}) {
+if (era === "default") return null; // don't show for contemporary songs
+return (
+<button
+type="button"
+onClick={onToggle}
+className={`text-xs uppercase tracking-[0.2em] transition-colors border-b pb-0.5 ${
+        useEra 
+          ? "border-ink text-ink dark:border-chalk dark:text-chalk" 
+          : "border-transparent text-warm-grey/50 hover:text-warm-grey dark:text-cool-grey/50 dark:hover:text-cool-grey"
+      }`}
+title={useEra ? "Switch to default voice" : `Switch to ${era} narrator`} >
+{useEra ? `${era} voice` : `try ${era} voice`}
+</button>
+);
+}
+
+--- STEP 5: Wire everything in ExhibitView JSX ---
+
+Replace <ListenButton /> in Panel 1 Lens section with:
+
+<div className="mt-3 flex items-center gap-4 flex-wrap">
+  <AudioPlayer
+    id="lens"
+    text={lensExplanation}
+    label="lens"
+    state={audioStates["lens"]}
+    progress={audioProgress["lens"] ?? 0}
+    duration={audioDuration["lens"] ?? 0}
+    onPlay={playNarration}
+    onSeek={seekTo}
+    onDownload={downloadAudio}
+  />
+  <EraToggle 
+    useEra={useEraVoice} 
+    era={songEra} 
+    onToggle={() => setUseEraVoice(v => !v)} 
+  />
+</div>
+
+Replace <ListenButton /> in Panel 2 (Inner World) with:
+
+<div className="mt-4 flex items-center gap-4 flex-wrap">
+  <AudioPlayer
+    id="inner"
+    text={innerWorld}
+    label="inner-world"
+    state={audioStates["inner"]}
+    progress={audioProgress["inner"] ?? 0}
+    duration={audioDuration["inner"] ?? 0}
+    onPlay={playNarration}
+    onSeek={seekTo}
+    onDownload={downloadAudio}
+  />
+  <EraToggle 
+    useEra={useEraVoice} 
+    era={songEra} 
+    onToggle={() => setUseEraVoice(v => !v)} 
+  />
+</div>
+
+Replace <ListenButton /> in Panel 3 (The Moment) with:
+
+<div className="mt-4 flex items-center gap-4 flex-wrap">
+  <AudioPlayer
+    id="moment"
+    text={theMoment}
+    label="the-moment"
+    state={audioStates["moment"]}
+    progress={audioProgress["moment"] ?? 0}
+    duration={audioDuration["moment"] ?? 0}
+    onPlay={playNarration}
+    onSeek={seekTo}
+    onDownload={downloadAudio}
+  />
+  <EraToggle 
+    useEra={useEraVoice} 
+    era={songEra} 
+    onToggle={() => setUseEraVoice(v => !v)} 
+  />
+</div>
+
+--- STEP 6: Update navbar to three-part layout ---
+
+Replace the existing <header> contents with:
+
+<header className={`fixed inset-x-0 top-0 z-50 flex items-center 
+  justify-between px-4 py-3 transition-transform duration-300 ${
+  navHidden ? "-translate-y-full" : "translate-y-0"
+} bg-paper/85 backdrop-blur-sm dark:bg-night/85`}>
+  
+  <button
+    type="button"
+    onClick={() => router.push("/search")}
+    aria-label="Search"
+    className="text-xs uppercase tracking-[0.25em] text-warm-grey 
+      transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+  >
+    ⌕ search
+  </button>
+
+<span className="absolute left-1/2 -translate-x-1/2 font-serif 
+    text-xs tracking-[0.3em] text-ink/50 dark:text-chalk/50 
+    hidden sm:block pointer-events-none">
+M U S I C O T E C A
+</span>
+
+  <ThemeToggle />
+</header>
+
+Add import at top of exhibit-view.tsx:
+import { ThemeToggle } from "@/components/theme-toggle";
+
+--- DO NOT change anything else ---
+No styling changes, no layout changes, no other files.

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface ExhibitTheme {
   theme: string;
@@ -155,13 +157,130 @@ function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
   );
 }
 
-function ListenButton() {
+function yearToEra(year: string): string {
+  const y = parseInt(year);
+  if (y < 1960) return "1950s";
+  if (y < 1970) return "1960s";
+  if (y < 1980) return "1970s";
+  if (y < 1990) return "1980s";
+  if (y < 2000) return "1990s";
+  if (y < 2010) return "2000s";
+  return "default";
+}
+
+type AudioState = "idle" | "loading" | "playing" | "paused" | "error";
+
+function formatTime(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+interface AudioPlayerProps {
+  id: string;
+  text: string;
+  label: string;
+  state: AudioState | undefined;
+  progress: number;
+  duration: number;
+  onPlay: (id: string, text: string) => void;
+  onSeek: (id: string, time: number) => void;
+  onDownload: (id: string, label: string) => void;
+}
+
+function AudioPlayer({
+  id,
+  text,
+  label,
+  state = "idle",
+  progress,
+  duration,
+  onPlay,
+  onSeek,
+  onDownload,
+}: AudioPlayerProps) {
+  const isActive = state === "playing" || state === "paused";
+  const pct = duration > 0 ? (progress / duration) * 100 : 0;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onPlay(id, text)}
+          disabled={!text || state === "loading"}
+          className="text-xs uppercase tracking-[0.25em] text-warm-grey transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 dark:text-cool-grey dark:hover:text-chalk"
+        >
+          {state === "loading"
+            ? "…"
+            : state === "playing"
+              ? "◼ stop"
+              : state === "paused"
+                ? "▶ resume"
+                : state === "error"
+                  ? "retry"
+                  : "▶ listen"}
+        </button>
+
+        {isActive && duration > 0 && (
+          <span className="text-xs tabular-nums text-warm-grey/60 dark:text-cool-grey/60">
+            {formatTime(progress)} / {formatTime(duration)}
+          </span>
+        )}
+
+        {isActive && (
+          <button
+            type="button"
+            onClick={() => onDownload(id, label)}
+            title="Download audio"
+            className="text-xs text-warm-grey/50 transition-colors hover:text-warm-grey dark:text-cool-grey/50 dark:hover:text-cool-grey"
+          >
+            ↓
+          </button>
+        )}
+      </div>
+
+      {isActive && (
+        <div
+          className="relative h-px w-full cursor-pointer bg-warm-line dark:bg-cool-line"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const frac = (e.clientX - rect.left) / rect.width;
+            onSeek(id, frac * duration);
+          }}
+        >
+          <div
+            className="h-full bg-ink transition-all dark:bg-chalk"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EraToggle({
+  useEra,
+  era,
+  onToggle,
+}: {
+  useEra: boolean;
+  era: string;
+  onToggle: () => void;
+}) {
+  if (era === "default") return null;
   return (
     <button
       type="button"
-      className="text-xs uppercase tracking-[0.25em] text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+      onClick={onToggle}
+      className={`border-b pb-0.5 text-xs uppercase tracking-[0.2em] transition-colors ${
+        useEra
+          ? "border-ink text-ink dark:border-chalk dark:text-chalk"
+          : "border-transparent text-warm-grey/50 hover:text-warm-grey dark:text-cool-grey/50 dark:hover:text-cool-grey"
+      }`}
+      title={useEra ? "Switch to default voice" : `Switch to ${era} narrator`}
     >
-      ▶ Listen
+      {useEra ? `${era} voice` : `try ${era} voice`}
     </button>
   );
 }
@@ -202,6 +321,129 @@ export function ExhibitView({
   const [navHidden, setNavHidden] = useState(false);
   const draggingRef = useRef(false);
   const lastScrollRef = useRef(0);
+
+  const [useEraVoice, setUseEraVoice] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<Record<string, string>>({});
+  const playTokenRef = useRef(0);
+
+  const [audioStates, setAudioStates] = useState<Record<string, AudioState>>(
+    {},
+  );
+  const [audioProgress, setAudioProgress] = useState<Record<string, number>>(
+    {},
+  );
+  const [audioDuration, setAudioDuration] = useState<Record<string, number>>(
+    {},
+  );
+  const [currentId, setCurrentId] = useState<string | null>(null);
+
+  const songEra = yearToEra(year);
+  const activeEra = useEraVoice ? songEra : "default";
+
+  const playNarration = useCallback(
+    async (id: string, text: string) => {
+      if (currentId === id && audioStates[id] === "playing") {
+        audioRef.current?.pause();
+        setAudioStates((s) => ({ ...s, [id]: "paused" }));
+        return;
+      }
+      if (currentId === id && audioStates[id] === "paused" && audioRef.current) {
+        await audioRef.current.play();
+        setAudioStates((s) => ({ ...s, [id]: "playing" }));
+        return;
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+
+      const token = ++playTokenRef.current;
+
+      setCurrentId(id);
+      setAudioStates((s) => {
+        const next: Record<string, AudioState> = { ...s, [id]: "loading" };
+        // Reset any other panel that was mid-playback; only one is ever active.
+        for (const key of Object.keys(next)) {
+          if (key !== id && (next[key] === "playing" || next[key] === "paused"))
+            next[key] = "idle";
+        }
+        return next;
+      });
+      setAudioProgress((s) => ({ ...s, [id]: 0 }));
+
+      try {
+        const cleanText = text.replace(/\*\*([^*]+)\*\*/g, "$1");
+        const res = await fetch("/api/narrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: cleanText, language, era: activeEra }),
+        });
+        if (!res.ok) throw new Error("narrate failed");
+
+        const blob = await res.blob();
+        // A newer narration request superseded this one — discard the result.
+        if (playTokenRef.current !== token) return;
+        if (blobUrlRef.current[id]) URL.revokeObjectURL(blobUrlRef.current[id]);
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current[id] = url;
+
+        const audio = new Audio(url);
+        audioRef.current = audio;
+
+        audio.ontimeupdate = () => {
+          setAudioProgress((s) => ({ ...s, [id]: audio.currentTime }));
+        };
+        audio.onloadedmetadata = () => {
+          setAudioDuration((s) => ({ ...s, [id]: audio.duration }));
+        };
+        audio.onended = () => {
+          setAudioStates((s) => ({ ...s, [id]: "idle" }));
+          setAudioProgress((s) => ({ ...s, [id]: 0 }));
+          setCurrentId(null);
+        };
+        audio.onerror = () => {
+          if (playTokenRef.current !== token) return;
+          setAudioStates((s) => ({ ...s, [id]: "error" }));
+          setCurrentId(null);
+        };
+
+        await audio.play();
+        setAudioStates((s) => ({ ...s, [id]: "playing" }));
+      } catch {
+        if (playTokenRef.current !== token) return;
+        setAudioStates((s) => ({ ...s, [id]: "error" }));
+        setCurrentId(null);
+      }
+    },
+    [language, activeEra, audioStates, currentId],
+  );
+
+  const seekTo = (id: string, time: number) => {
+    if (currentId === id && audioRef.current) {
+      audioRef.current.currentTime = time;
+      setAudioProgress((s) => ({ ...s, [id]: time }));
+    }
+  };
+
+  const downloadAudio = (id: string, label: string) => {
+    const url = blobUrlRef.current[id];
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}-${label}.mp3`.replace(/\s+/g, "-");
+    a.click();
+  };
+
+  // Stop playback and release blob URLs on unmount.
+  useEffect(() => {
+    const blobs = blobUrlRef.current;
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      Object.values(blobs).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Track desktop breakpoint; reset the manual width when leaving desktop.
   useEffect(() => {
@@ -309,7 +551,7 @@ export function ExhibitView({
     <main className="relative h-screen overflow-hidden">
       {/* Auto-hiding top nav */}
       <header
-        className={`fixed inset-x-0 top-0 z-50 flex items-center px-4 py-3 transition-transform duration-300 ${
+        className={`fixed inset-x-0 top-0 z-50 flex items-center justify-between px-4 py-3 transition-transform duration-300 ${
           navHidden ? "-translate-y-full" : "translate-y-0"
         } bg-paper/85 backdrop-blur-sm dark:bg-night/85`}
       >
@@ -317,15 +559,16 @@ export function ExhibitView({
           type="button"
           onClick={() => router.push("/search")}
           aria-label="Search"
-          className="text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
+          className="text-xs uppercase tracking-[0.25em] text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
         >
-          <span className="text-lg md:hidden" aria-hidden="true">
-            ⌕ search
-          </span>
-          <span className="hidden text-xs uppercase tracking-[0.25em] md:inline">
-            ⌕ search
-          </span>
+          ⌕ search
         </button>
+
+        <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 font-serif text-xs tracking-[0.3em] text-ink/50 sm:block dark:text-chalk/50">
+          M U S I C O T E C A
+        </span>
+
+        <ThemeToggle />
       </header>
 
       <div
@@ -444,6 +687,25 @@ export function ExhibitView({
             <p className="mt-3 font-serif text-base italic leading-relaxed text-ink dark:text-chalk">
               {lensExplanation}
             </p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <AudioPlayer
+                id="lens"
+                text={lensExplanation}
+                label="lens"
+                state={audioStates["lens"]}
+                progress={audioProgress["lens"] ?? 0}
+                duration={audioDuration["lens"] ?? 0}
+                onPlay={playNarration}
+                onSeek={seekTo}
+                onDownload={downloadAudio}
+              />
+              <EraToggle
+                useEra={useEraVoice}
+                era={songEra}
+                onToggle={() => setUseEraVoice((v) => !v)}
+              />
+            </div>
           </div>
 
           <div className="mt-8 mb-4 flex items-center justify-center gap-2 md:hidden">
@@ -479,8 +741,23 @@ export function ExhibitView({
               {year ? ` · ${year}` : ""}
             </p>
 
-            <div className="mt-4">
-              <ListenButton />
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <AudioPlayer
+                id="inner"
+                text={innerWorld}
+                label="inner-world"
+                state={audioStates["inner"]}
+                progress={audioProgress["inner"] ?? 0}
+                duration={audioDuration["inner"] ?? 0}
+                onPlay={playNarration}
+                onSeek={seekTo}
+                onDownload={downloadAudio}
+              />
+              <EraToggle
+                useEra={useEraVoice}
+                era={songEra}
+                onToggle={() => setUseEraVoice((v) => !v)}
+              />
             </div>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
@@ -515,8 +792,23 @@ export function ExhibitView({
               {year}
             </p>
 
-            <div className="mt-4">
-              <ListenButton />
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <AudioPlayer
+                id="moment"
+                text={theMoment}
+                label="the-moment"
+                state={audioStates["moment"]}
+                progress={audioProgress["moment"] ?? 0}
+                duration={audioDuration["moment"] ?? 0}
+                onPlay={playNarration}
+                onSeek={seekTo}
+                onDownload={downloadAudio}
+              />
+              <EraToggle
+                useEra={useEraVoice}
+                era={songEra}
+                onToggle={() => setUseEraVoice((v) => !v)}
+              />
             </div>
 
             <div className="mt-6 space-y-4 text-sm leading-loose text-ink/90 dark:text-chalk/90">
