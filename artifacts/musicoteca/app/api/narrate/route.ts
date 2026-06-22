@@ -9,6 +9,7 @@ const VOICE_MAP: Record<string, string> = {
   "1980s": "z8Z7TbjIBaor7fzwiadh",
   "1990s": "o98AvbWqdipnEF1z8h4p",
   "2000s": "bRDyApmqjRqHeDaynDN0",
+  "2010s": "Atn2QJg3TnFV3zBkm0i0",
   default: "Atn2QJg3TnFV3zBkm0i0",
 };
 

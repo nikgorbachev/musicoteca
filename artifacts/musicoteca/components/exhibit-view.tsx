@@ -159,13 +159,14 @@ function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
 
 function yearToEra(year: string): string {
   const y = parseInt(year);
+  if (isNaN(y)) return "";
   if (y < 1960) return "1950s";
   if (y < 1970) return "1960s";
   if (y < 1980) return "1970s";
   if (y < 1990) return "1980s";
   if (y < 2000) return "1990s";
   if (y < 2010) return "2000s";
-  return "default";
+  return "2010s";
 }
 
 type AudioState = "idle" | "loading" | "playing" | "paused" | "error";
@@ -268,7 +269,7 @@ function EraToggle({
   era: string;
   onToggle: () => void;
 }) {
-  if (era === "default") return null;
+  if (!era) return null;
   return (
     <button
       type="button"
@@ -278,9 +279,9 @@ function EraToggle({
           ? "border-ink text-ink dark:border-chalk dark:text-chalk"
           : "border-transparent text-warm-grey/50 hover:text-warm-grey dark:text-cool-grey/50 dark:hover:text-cool-grey"
       }`}
-      title={useEra ? "Switch to default voice" : `Switch to ${era} narrator`}
+      title={useEra ? "Switch to default voice" : `Try ${era} narrator`}
     >
-      {useEra ? `${era} voice` : `try ${era} voice`}
+      {useEra ? `${era} voice ×` : `${era} voice`}
     </button>
   );
 }
@@ -684,9 +685,6 @@ export function ExhibitView({
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               Lens
             </p>
-            <p className="mt-3 font-serif text-base italic leading-relaxed text-ink dark:text-chalk">
-              {lensExplanation}
-            </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-4">
               <AudioPlayer
@@ -706,13 +704,21 @@ export function ExhibitView({
                 onToggle={() => setUseEraVoice((v) => !v)}
               />
             </div>
-          </div>
 
-          <div className="mt-8 mb-4 flex items-center justify-center gap-2 md:hidden">
-            <span className="text-xs uppercase tracking-[0.25em] text-warm-grey/50 dark:text-cool-grey/50">
-              swipe for context
-            </span>
-            <span className="text-warm-grey/50 dark:text-cool-grey/50">→</span>
+            <p className="mt-3 font-serif text-base italic leading-relaxed text-ink dark:text-chalk">
+              {lensExplanation}
+            </p>
+
+            <p className="mt-4 text-xs uppercase tracking-[0.25em] text-warm-grey/60 dark:text-cool-grey/60">
+              source: musixmatch
+            </p>
+
+            <div className="mt-8 mb-4 flex items-center justify-center gap-2 md:hidden">
+              <span className="text-xs uppercase tracking-[0.25em] text-warm-grey/50 dark:text-cool-grey/50">
+                swipe for context
+              </span>
+              <span className="text-warm-grey/50 dark:text-cool-grey/50">→</span>
+            </div>
           </div>
         </section>
 
