@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useState,
+  type ReactNode,
 } from "react";
 
 type Theme = "light" | "dark";
@@ -19,7 +20,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "musicoteca-theme";
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
