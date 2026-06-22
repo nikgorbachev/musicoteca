@@ -38,10 +38,38 @@ export interface ExhibitData {
 }
 
 const RU_TRANSLIT: Record<string, string> = {
-  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh",
-  з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o",
-  п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts",
-  ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu",
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "kh",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "shch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
   я: "ya",
 };
 
@@ -100,11 +128,14 @@ function renderMarkdown(text: string, lang: string, showTranslit: boolean) {
           const wikiUrl = `https://${lang}.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
             entityText,
           )}`;
-          const isNonLatin = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF]/.test(
-            entityText,
-          );
+          const isNonLatin =
+            /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF]/.test(
+              entityText,
+            );
           const displayText =
-            showTranslit && isNonLatin ? transliterateRu(entityText) : entityText;
+            showTranslit && isNonLatin
+              ? transliterateRu(entityText)
+              : entityText;
           return (
             <a
               href={wikiUrl}
@@ -136,7 +167,7 @@ function ListenButton() {
 }
 
 const PANEL_BASE =
-  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 pb-16 pt-16 md:w-auto md:snap-align-none md:px-8";
+  "h-full w-screen shrink-0 snap-start overflow-y-auto px-6 pb-24 pt-16 md:w-auto md:snap-align-none md:px-8";
 
 export function ExhibitView({
   title,
@@ -237,10 +268,12 @@ export function ExhibitView({
   const coverSrc = wikiImage ?? youtubeThumbnail ?? wikiImageArtist ?? null;
   const lang = language.toLowerCase().slice(0, 2);
   const canTranslate = lang !== "en" && lang !== "" && lyrics.trim().length > 0;
-  const NON_LATIN_RE = /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF\uAC00-\uD7AF]/;
+  const NON_LATIN_RE =
+    /[\u0400-\u04FF\u0600-\u06FF\u3040-\u9FFF\u0370-\u03FF\uAC00-\uD7AF]/;
   const hasTranslit = NON_LATIN_RE.test(title) || NON_LATIN_RE.test(artist);
   const displayTitle = showTranslit && titleTranslit ? titleTranslit : title;
-  const displayArtist = showTranslit && artistTranslit ? artistTranslit : artist;
+  const displayArtist =
+    showTranslit && artistTranslit ? artistTranslit : artist;
 
   const handleTranslate = async () => {
     if (showTranslation) {
@@ -287,7 +320,7 @@ export function ExhibitView({
           className="text-warm-grey transition-colors hover:text-ink dark:text-cool-grey dark:hover:text-chalk"
         >
           <span className="text-lg md:hidden" aria-hidden="true">
-            ←
+            ⌕ search
           </span>
           <span className="hidden text-xs uppercase tracking-[0.25em] md:inline">
             ⌕ search
@@ -412,6 +445,13 @@ export function ExhibitView({
               {lensExplanation}
             </p>
           </div>
+
+          <div className="mt-8 mb-4 flex items-center justify-center gap-2 md:hidden">
+            <span className="text-xs uppercase tracking-[0.25em] text-warm-grey/50 dark:text-cool-grey/50">
+              swipe for context
+            </span>
+            <span className="text-warm-grey/50 dark:text-cool-grey/50">→</span>
+          </div>
         </section>
 
         {/* Draggable divider (desktop only) */}
@@ -426,7 +466,10 @@ export function ExhibitView({
         )}
 
         {/* Panel 2 — INNER WORLD */}
-        <section onScroll={handlePanelScroll} className={`${PANEL_BASE} md:flex-1`}>
+        <section
+          onScroll={handlePanelScroll}
+          className={`${PANEL_BASE} md:flex-1`}
+        >
           <div className="mx-auto flex h-full max-w-md flex-col pb-8">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               Inner World
@@ -460,7 +503,10 @@ export function ExhibitView({
         </section>
 
         {/* Panel 3 — THE MOMENT */}
-        <section onScroll={handlePanelScroll} className={`${PANEL_BASE} md:flex-1`}>
+        <section
+          onScroll={handlePanelScroll}
+          className={`${PANEL_BASE} md:flex-1`}
+        >
           <div className="mx-auto flex h-full max-w-md flex-col pb-8">
             <p className="text-xs uppercase tracking-[0.3em] text-warm-grey dark:text-cool-grey">
               The Moment
