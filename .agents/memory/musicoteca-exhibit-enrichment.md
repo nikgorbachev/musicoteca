@@ -108,6 +108,24 @@ for the museum-placard tone, and the per-model fallback dance wasn't worth it.
 **Why:** quality > token-cap cleverness for this product. The Groq notes below are kept
 as general reference only; they no longer describe the live code path.
 
+# Release decade is deduced by the LLM, not trusted from metadata
+
+The exhibit "era voice" decade comes from the Mistral `/api/context` call (it already
+has the Wikipedia extract + title/artist), which returns an `era` field ("1970s"…)
+alongside the placards — NOT from a release-year field. Musixmatch `first_release_date`
+is almost always empty, and album names rarely embed a year, so any year-based default
+(an earlier "2015" fallback) collapsed every song to "2010s".
+
+**Why:** reuse the LLM pass that's already happening (no extra round-trip/dependency);
+the model knows release decades and the wiki extract usually states the year. Resolution
+chain in `exhibit-view.tsx`: `yearToEra(year) || llmEra || yearToEra(albumYearRegex)`;
+unknown → "" → the era toggle hides entirely. Server validates `era` against
+`/^(19|20)\d0s$/` so malformed output degrades to "".
+
+**How to apply:** the EraToggle is hidden when era is "", "2010s", or "2020s" — the
+default narrator IS the modern voice, so the toggle would be a no-op. Only older decades
+surface a toggle. Don't reintroduce a hardcoded year default "to always show it".
+
 # Newly added secrets need a workflow restart to reach the running process
 
 Adding a secret (e.g. `MISTRAL_API_KEY`) via the secrets tooling does NOT inject it into

@@ -23,6 +23,7 @@ export interface ExhibitData {
   artist: string;
   album: string;
   year: string;
+  deducedEra: string;
   lyrics: string;
   lensExplanation: string;
   moods: string[];
@@ -269,7 +270,10 @@ function EraToggle({
   era: string;
   onToggle: () => void;
 }) {
-  if (!era) return null;
+  // Hide the toggle when there's no distinct historical voice to offer: the
+  // default narrator already is the 2010s/2020s voice, so toggling would do
+  // nothing. Only show it when a genuinely older era voice exists.
+  if (!era || era === "2010s" || era === "2020s") return null;
   return (
     <button
       type="button"
@@ -294,6 +298,7 @@ export function ExhibitView({
   artist,
   album,
   year,
+  deducedEra,
   lyrics,
   lensExplanation,
   moods,
@@ -340,10 +345,17 @@ export function ExhibitView({
   );
   const [currentId, setCurrentId] = useState<string | null>(null);
 
-  // Try year prop first, then extract from album name, then default to 2010s
-  const effectiveYear =
-    year || (album.match(/\b(19|20)\d{2}\b/)?.[0] ?? "2015");
-  const songEra = yearToEra(effectiveYear);
+  // Resolve the release decade. Prefer a real release year (from Musixmatch),
+  // then the decade Mistral deduced from the Wikipedia research, then any year
+  // embedded in the album name. If none resolve, songEra is "" and the toggle
+  // stays hidden — better than guessing a wrong "2010s voice".
+  const normalizedDeducedEra = /^(19|20)\d0s$/.test(deducedEra)
+    ? deducedEra
+    : "";
+  const songEra =
+    yearToEra(year) ||
+    normalizedDeducedEra ||
+    yearToEra(album.match(/\b(19|20)\d{2}\b/)?.[0] ?? "");
   const activeEra = useEraVoice ? songEra : "default";
 
   const playNarration = useCallback(
@@ -573,7 +585,7 @@ export function ExhibitView({
           ⌕ search
         </button>
 
-        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-serif text-[10px] tracking-[0.2em] text-ink/50 dark:text-chalk/50 block">
+        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-serif text-xs tracking-[0.2em] text-ink/50 dark:text-chalk/50 block">
           M U S I C O T E C A
         </span>
 
@@ -694,7 +706,7 @@ export function ExhibitView({
               Lens
             </p>
 
-            <div className="mt-3 flex flex-wrap items-center gap-4">
+            <div className="mt-3 flex flex-wrap items-baseline gap-4">
               <AudioPlayer
                 id="lens"
                 text={lensExplanation}
@@ -757,7 +769,7 @@ export function ExhibitView({
               {year ? ` · ${year}` : ""}
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div className="mt-4 flex flex-wrap items-baseline gap-4">
               <AudioPlayer
                 id="inner"
                 text={innerWorld}
@@ -808,7 +820,7 @@ export function ExhibitView({
               {year}
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div className="mt-4 flex flex-wrap items-baseline gap-4">
               <AudioPlayer
                 id="moment"
                 text={theMoment}

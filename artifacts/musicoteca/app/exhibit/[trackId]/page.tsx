@@ -100,6 +100,7 @@ export default async function ExhibitPage({
 
     let innerWorld = "";
     let theMoment = "";
+    let deducedEra = "";
     try {
       const ctxRes = await fetchWithTimeout(
         `${base}/api/context`,
@@ -124,9 +125,11 @@ export default async function ExhibitPage({
         const ctx = (await ctxRes.json()) as {
           innerWorld?: string;
           theMoment?: string;
+          era?: string;
         };
         innerWorld = ctx.innerWorld ?? "";
         theMoment = ctx.theMoment ?? "";
+        deducedEra = ctx.era ?? "";
       }
     } catch (e) {
       // timeout or network error — leave innerWorld/theMoment as ""
@@ -140,6 +143,7 @@ export default async function ExhibitPage({
         artist={artist}
         album={album}
         year={year}
+        deducedEra={deducedEra}
         lyrics={ex.lyrics ?? ""}
         lensExplanation={ex.lensExplanation ?? ""}
         moods={ex.moods ?? []}

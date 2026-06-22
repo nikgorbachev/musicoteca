@@ -10,16 +10,6 @@
       "static/chunks/main-app.js",
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
-    ],
-    "/exhibit/[trackId]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/exhibit/[trackId]/page.js"
-    ],
-    "/exhibit/[trackId]/loading": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/exhibit/[trackId]/loading.js"
     ]
   }
 }

@@ -53,9 +53,16 @@ Background research (${wikiSource} level): ${wikiExtract}
 Musixmatch analysis: ${lensExplanation}
 Moods: ${moods.join(", ")}
 
-Return JSON with exactly two keys. Each value MUST be a single plain string 
-with paragraphs separated by a blank line (\n\n) — NEVER an array, and never 
-split a sentence across entries.
+Return JSON with exactly three keys: "innerWorld", "theMoment", and "era". 
+"innerWorld" and "theMoment" MUST each be a single plain string with paragraphs 
+separated by a blank line (\n\n) — NEVER an array, and never split a sentence 
+across entries.
+
+"era": the decade in which this song was originally released, formatted exactly 
+as one of "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", 
+"2020s". Decide using the background research and your own knowledge of the 
+song and artist — do NOT just echo the year in the prompt if it looks wrong. 
+If the release decade is genuinely unknown, return an empty string "".
 
 "innerWorld": 2-3 paragraphs written as a museum audioguide narrator. 
 Draw on the research provided and your own knowledge of the artist and era. 
@@ -100,9 +107,12 @@ Write in English. Museum wall plaque tone — precise, warm, never academic.`;
     }
     if (!parsed) return NextResponse.json(empty);
 
+    const era = typeof parsed.era === "string" ? parsed.era.trim() : "";
+
     return NextResponse.json({
       innerWorld: stripMarkdown(toText(parsed.innerWorld)),
       theMoment: stripMarkdown(toText(parsed.theMoment ?? parsed["theМoment"])),
+      era: /^(19|20)\d0s$/.test(era) ? era : "",
     });
   } catch {
     return NextResponse.json(empty);

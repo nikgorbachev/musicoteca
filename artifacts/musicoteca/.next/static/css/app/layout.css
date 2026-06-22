@@ -860,6 +860,9 @@ video {
 .items-center {
   align-items: center;
 }
+.items-baseline {
+  align-items: baseline;
+}
 .justify-center {
   justify-content: center;
 }
@@ -1024,9 +1027,6 @@ video {
 .text-3xl {
   font-size: 1.875rem;
   line-height: 2.25rem;
-}
-.text-\[10px\] {
-  font-size: 10px;
 }
 .text-\[clamp\(1\.2rem\2c 5vw\2c 3rem\)\] {
   font-size: clamp(1.2rem, 5vw, 3rem);
