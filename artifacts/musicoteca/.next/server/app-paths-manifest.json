@@ -1,6 +1,6 @@
 {
-  "/exhibit/[trackId]/page": "app/exhibit/[trackId]/page.js",
   "/api/exhibit/[trackId]/route": "app/api/exhibit/[trackId]/route.js",
   "/api/context/route": "app/api/context/route.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/exhibit/[trackId]/page": "app/exhibit/[trackId]/page.js"
 }

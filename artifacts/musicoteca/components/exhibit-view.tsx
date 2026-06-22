@@ -292,6 +292,7 @@ const PANEL_BASE =
 export function ExhibitView({
   title,
   artist,
+  album,
   year,
   lyrics,
   lensExplanation,
@@ -339,7 +340,10 @@ export function ExhibitView({
   );
   const [currentId, setCurrentId] = useState<string | null>(null);
 
-  const songEra = yearToEra(year);
+  // Try year prop first, then extract from album name, then default to 2010s
+  const effectiveYear =
+    year || (album.match(/\b(19|20)\d{2}\b/)?.[0] ?? "2015");
+  const songEra = yearToEra(effectiveYear);
   const activeEra = useEraVoice ? songEra : "default";
 
   const playNarration = useCallback(
@@ -349,7 +353,11 @@ export function ExhibitView({
         setAudioStates((s) => ({ ...s, [id]: "paused" }));
         return;
       }
-      if (currentId === id && audioStates[id] === "paused" && audioRef.current) {
+      if (
+        currentId === id &&
+        audioStates[id] === "paused" &&
+        audioRef.current
+      ) {
         await audioRef.current.play();
         setAudioStates((s) => ({ ...s, [id]: "playing" }));
         return;
@@ -565,7 +573,7 @@ export function ExhibitView({
           ⌕ search
         </button>
 
-        <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 font-serif text-xs tracking-[0.3em] text-ink/50 sm:block dark:text-chalk/50">
+        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-serif text-[10px] tracking-[0.2em] text-ink/50 dark:text-chalk/50 block">
           M U S I C O T E C A
         </span>
 
@@ -709,7 +717,7 @@ export function ExhibitView({
               {lensExplanation}
             </p>
 
-            <p className="mt-4 text-xs uppercase tracking-[0.25em] text-warm-grey/60 dark:text-cool-grey/60">
+            <p className="mt-8 text-xs uppercase tracking-[0.25em] text-warm-grey/60 dark:text-cool-grey/60">
               source: musixmatch
             </p>
 
@@ -717,7 +725,9 @@ export function ExhibitView({
               <span className="text-xs uppercase tracking-[0.25em] text-warm-grey/50 dark:text-cool-grey/50">
                 swipe for context
               </span>
-              <span className="text-warm-grey/50 dark:text-cool-grey/50">→</span>
+              <span className="text-warm-grey/50 dark:text-cool-grey/50">
+                →
+              </span>
             </div>
           </div>
         </section>
@@ -770,7 +780,7 @@ export function ExhibitView({
               {renderMarkdown(innerWorld, lang, showTranslit)}
             </div>
 
-            <div className="mt-auto pt-8">
+            <div className="mt-8">
               {wikiUrl && (
                 <a
                   href={wikiUrl}
@@ -821,7 +831,7 @@ export function ExhibitView({
               {renderMarkdown(theMoment, lang, showTranslit)}
             </div>
 
-            <div className="mt-auto pt-8">
+            <div className="mt-8">
               {wikiUrl && (
                 <a
                   href={wikiUrl}
